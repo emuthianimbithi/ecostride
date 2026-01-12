@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+
+# Node
+node_modules/
+.next/
+
+# Go
+bin/
+*.exe
+*.test
+
+# Env
+.env
+.env.local
+
+# Media/uploads
+backend/uploads/
+
+# Logs
+*.log

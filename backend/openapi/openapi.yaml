@@ -1,0 +1,1185 @@
+openapi: 3.0.3
+info:
+  title: EcoStride API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080/api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /auth/logout:
+    post:
+      summary: Logout
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /me:
+    get:
+      summary: Current user profile
+      tags: [Auth]
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/pages/{slug}:
+    get:
+      summary: Get published page
+      tags: [Public CMS]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/posts:
+    get:
+      summary: List published posts
+      tags: [Public CMS]
+      responses:
+        "200": { description: OK }
+  /public/posts/{slug}:
+    get:
+      summary: Get published post
+      tags: [Public CMS]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/gallery/albums:
+    get:
+      summary: List gallery albums
+      tags: [Public CMS]
+      responses:
+        "200": { description: OK }
+  /public/gallery/albums/{slug}:
+    get:
+      summary: Get gallery album
+      tags: [Public CMS]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/sponsors:
+    get:
+      summary: List sponsors
+      tags: [Public Sponsors]
+      responses:
+        "200": { description: OK }
+  /public/sponsors/{slug}/view:
+    post:
+      summary: Record sponsor view
+      tags: [Public Sponsors]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+        - in: query
+          name: page
+          required: false
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/events:
+    get:
+      summary: List events
+      tags: [Public Events]
+      responses:
+        "200": { description: OK }
+  /public/events/{slug}:
+    get:
+      summary: Get event
+      tags: [Public Events]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/events/{slug}/categories:
+    get:
+      summary: List event categories
+      tags: [Public Events]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/events/{slug}/waiver/current:
+    get:
+      summary: Get current waiver
+      tags: [Public Events]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/registrations:
+    post:
+      summary: Create registration
+      tags: [Public Registration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+        "400": { description: Bad Request, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/registrations/{id}:
+    get:
+      summary: Get registration
+      tags: [Public Registration]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/registrations/{id}/confirmation.pdf:
+    get:
+      summary: Download confirmation PDF
+      tags: [Public Registration]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /public/payments/stripe/checkout:
+    post:
+      summary: Create Stripe checkout session
+      tags: [Public Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /webhooks/stripe:
+    post:
+      summary: Stripe webhook
+      tags: [Webhooks]
+      responses:
+        "200": { description: OK }
+  /public/payments/mpesa/stk:
+    post:
+      summary: Initiate M-Pesa STK push
+      tags: [Public Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /webhooks/mpesa:
+    post:
+      summary: M-Pesa webhook
+      tags: [Webhooks]
+      responses:
+        "200": { description: OK }
+  /public/payments/{id}/status:
+    get:
+      summary: Payment status
+      tags: [Public Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/results/events/{slug}:
+    get:
+      summary: List results
+      tags: [Public Results]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/results/events/{slug}/search:
+    get:
+      summary: Search results
+      tags: [Public Results]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/results/events/{slug}/leaderboard:
+    get:
+      summary: Results leaderboard
+      tags: [Public Results]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/volunteers:
+    post:
+      summary: Volunteer signup
+      tags: [Public Volunteers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /public/shop/products:
+    get:
+      summary: List products
+      tags: [Public Shop]
+      responses:
+        "200": { description: OK }
+  /public/shop/orders:
+    post:
+      summary: Create order
+      tags: [Public Shop]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /public/shop/orders/{id}/pay/stripe:
+    post:
+      summary: Pay order with Stripe
+      tags: [Public Shop]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /public/shop/orders/{id}/pay/mpesa:
+    post:
+      summary: Pay order with M-Pesa
+      tags: [Public Shop]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/pages:
+    get:
+      summary: List pages
+      tags: [Admin CMS]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create page
+      tags: [Admin CMS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/pages/{id}:
+    put:
+      summary: Update page
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete page
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/pages/{id}/publish:
+    post:
+      summary: Publish page
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/posts:
+    get:
+      summary: List posts
+      tags: [Admin CMS]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create post
+      tags: [Admin CMS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/posts/{id}:
+    put:
+      summary: Update post
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete post
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/posts/{id}/publish:
+    post:
+      summary: Publish post
+      tags: [Admin CMS]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/media/upload:
+    post:
+      summary: Upload media record
+      tags: [Admin CMS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/media:
+    get:
+      summary: List media
+      tags: [Admin CMS]
+      responses:
+        "200": { description: OK }
+  /admin/waivers:
+    get:
+      summary: List waivers
+      tags: [Admin CMS]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create waiver
+      tags: [Admin CMS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+    put:
+      summary: Update waiver
+      tags: [Admin CMS]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/users:
+    get:
+      summary: List users
+      tags: [Admin Users]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create user
+      tags: [Admin Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/users/{id}:
+    put:
+      summary: Update user
+      tags: [Admin Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/users/{id}/roles:
+    post:
+      summary: Update user roles
+      tags: [Admin Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/roles:
+    get:
+      summary: List roles
+      tags: [Admin Users]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create role
+      tags: [Admin Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/roles/{id}:
+    put:
+      summary: Update role
+      tags: [Admin Users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/permissions:
+    get:
+      summary: List permissions
+      tags: [Admin Users]
+      responses:
+        "200": { description: OK }
+  /admin/events:
+    get:
+      summary: List events
+      tags: [Admin Events]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create event
+      tags: [Admin Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/events/{id}:
+    put:
+      summary: Update event
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete event
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/publish:
+    post:
+      summary: Publish event
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/categories:
+    get:
+      summary: List categories
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create category
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/events/{id}/categories/{categoryId}:
+    put:
+      summary: Update category
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete category
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/form-fields:
+    get:
+      summary: List form fields
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create form field
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/events/{id}/form-fields/{fieldId}:
+    put:
+      summary: Update form field
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: fieldId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete form field
+      tags: [Admin Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: fieldId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/registrations:
+    get:
+      summary: List registrations
+      tags: [Admin Registrations]
+      responses:
+        "200": { description: OK }
+  /admin/registrations/export:
+    get:
+      summary: Export registrations
+      tags: [Admin Registrations]
+      responses:
+        "200": { description: OK }
+  /admin/registrations/{id}:
+    get:
+      summary: Get registration
+      tags: [Admin Registrations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    put:
+      summary: Update registration
+      tags: [Admin Registrations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/registrations/{id}/cancel:
+    post:
+      summary: Cancel registration
+      tags: [Admin Registrations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/registrations/{id}/resend-confirmation:
+    post:
+      summary: Resend confirmation
+      tags: [Admin Registrations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/registrations/{id}/resend-receipt:
+    post:
+      summary: Resend receipt
+      tags: [Admin Registrations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/payments:
+    get:
+      summary: List payments
+      tags: [Admin Payments]
+      responses:
+        "200": { description: OK }
+  /admin/payments/{id}/refund:
+    post:
+      summary: Refund payment
+      tags: [Admin Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/finance/dashboard:
+    get:
+      summary: Finance dashboard
+      tags: [Admin Finance]
+      responses:
+        "200": { description: OK }
+  /admin/finance/export:
+    get:
+      summary: Finance export
+      tags: [Admin Finance]
+      responses:
+        "200": { description: OK }
+  /admin/reconciliation/import:
+    post:
+      summary: Reconciliation import
+      tags: [Admin Finance]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/reconciliation/match:
+    post:
+      summary: Reconciliation match
+      tags: [Admin Finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/reconciliation/resolve:
+    post:
+      summary: Reconciliation resolve
+      tags: [Admin Finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/bibs/auto-assign:
+    post:
+      summary: Auto-assign bibs
+      tags: [Admin Bibs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/bibs/manual-assign:
+    post:
+      summary: Manual assign bib
+      tags: [Admin Bibs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/bibs/lock:
+    post:
+      summary: Lock bibs
+      tags: [Admin Bibs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/start-list/export:
+    get:
+      summary: Export start list
+      tags: [Admin Bibs]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/checkin/{registrationId}:
+    post:
+      summary: Check-in registration
+      tags: [Admin Bibs]
+      parameters:
+        - in: path
+          name: registrationId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/results/import:
+    post:
+      summary: Import results
+      tags: [Admin Results]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/results/publish:
+    post:
+      summary: Publish results
+      tags: [Admin Results]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/events/{id}/results/unpublish:
+    post:
+      summary: Unpublish results
+      tags: [Admin Results]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/sponsor-tiers:
+    get:
+      summary: List sponsor tiers
+      tags: [Admin Sponsors]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create sponsor tier
+      tags: [Admin Sponsors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/sponsor-tiers/{id}:
+    put:
+      summary: Update sponsor tier
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete sponsor tier
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/sponsors:
+    get:
+      summary: List sponsors
+      tags: [Admin Sponsors]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create sponsor
+      tags: [Admin Sponsors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/sponsors/{id}:
+    put:
+      summary: Update sponsor
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete sponsor
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/sponsors/{id}/placements:
+    post:
+      summary: Update placements
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/sponsors/{id}/analytics:
+    get:
+      summary: Sponsor analytics
+      tags: [Admin Sponsors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/volunteers:
+    get:
+      summary: List volunteers
+      tags: [Admin Volunteers]
+      responses:
+        "200": { description: OK }
+  /admin/volunteers/{id}/assign:
+    post:
+      summary: Assign volunteer
+      tags: [Admin Volunteers]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/volunteers/communicate:
+    post:
+      summary: Volunteer broadcast
+      tags: [Admin Volunteers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+  /admin/volunteers/export:
+    get:
+      summary: Export volunteers
+      tags: [Admin Volunteers]
+      responses:
+        "200": { description: OK }
+  /admin/products:
+    get:
+      summary: List products
+      tags: [Admin Shop]
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create product
+      tags: [Admin Shop]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+  /admin/products/{id}:
+    put:
+      summary: Update product
+      tags: [Admin Shop]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete product
+      tags: [Admin Shop]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/orders:
+    get:
+      summary: List orders
+      tags: [Admin Shop]
+      responses:
+        "200": { description: OK }
+  /admin/audit-logs:
+    get:
+      summary: List audit logs
+      tags: [Admin Audit]
+      responses:
+        "200": { description: OK }
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Invalid request data"
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    description: "snake_case field name"
+                    example: "email_address"
+                  issue:
+                    type: string
+                    example: "must be a valid email"
+    
+    HeroStyle:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key:
+          type: string
+        description:
+          type: string
+        layout_type:
+          type: string
+        aspect_ratio:
+          type: string
+        text_placement:
+          type: string
+        padding_variant:
+          type: string
+        is_active:
+          type: boolean
+        overlay:
+          type: object
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+          format: uuid
+        url_slug:
+          type: string
+        title:
+          type: string
+        content:
+          type: object
+        excerpt:
+          type: string
+        featured_image_media_id:
+          type: integer
+        featured_image_url:
+          type: string
+        hero_style_id:
+          type: string
+        hero_style:
+          $ref: "#/components/schemas/HeroStyle"
+        hero_show_title:
+          type: boolean
+        status:
+          type: string
+        published_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time

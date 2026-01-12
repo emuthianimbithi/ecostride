@@ -1,0 +1,34 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 34 38% 97%;
+  --foreground: 170 22% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 170 22% 16%;
+  --muted: 30 24% 93%;
+  --muted-foreground: 180 7% 42%;
+  --border: 30 15% 84%;
+  --input: 30 15% 84%;
+  --primary: 170 38% 28%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 20% 94%;
+  --secondary-foreground: 170 22% 16%;
+  --destructive: 0 70% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 170 38% 28%;
+}
+
+body {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: hsl(var(--foreground));
+  background: radial-gradient(1200px 600px at 10% -10%, hsl(var(--secondary)) 0%, hsl(var(--background)) 50%, hsl(var(--muted)) 100%);
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: "Playfair Display", "Times New Roman", serif;
+}
