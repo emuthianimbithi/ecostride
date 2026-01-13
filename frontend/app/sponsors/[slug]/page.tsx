@@ -3,15 +3,23 @@ import SponsorViewTracker from "../../../components/sponsor-view-tracker"
 import { serverGet } from "../../../lib/api-server"
 import { normalizeSponsor } from "../../../lib/normalize-sponsor"
 
-export default async function Page({ params }: { params: { slug: string } }) {
+type PageProps = {
+  params: Promise<{ slug: string }>
+}
+
+export default async function Page({ params }: PageProps) {
+  // Next.js 15+: params is a Promise, unwrap it
+  const { slug } = await params
+
   let sponsors: any[] = []
   try {
-    sponsors = await serverGet<any[]>("/public/sponsors", { next: { revalidate: 60 } })
-  } catch {
+    sponsors = await serverGet<any[]>("/public/sponsors")
+  } catch (err) {
+    console.error("Failed to load sponsors:", err)
     sponsors = []
   }
 
-  const sponsor = sponsors.map(normalizeSponsor).find((item) => item.url_slug === params.slug)
+  const sponsor = sponsors.map(normalizeSponsor).find((item) => item.url_slug === slug)
   if (!sponsor) {
     return (
       <main className="px-6 py-12 md:py-16">

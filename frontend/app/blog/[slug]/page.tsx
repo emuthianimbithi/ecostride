@@ -13,26 +13,24 @@ type Post = {
 }
 
 type PageProps = {
-    params: Promise<{ slug: string }>
+  params: Promise<{ slug: string }>
 }
 
 export default async function Page({ params }: PageProps) {
   try {
-      const { slug } = await params
-      console.log("Fetching post with slug:", slug);
-    const post = await serverGet<Post>(`/public/posts/${slug}`, { next: { revalidate: 60 }, cache : "no-store" })
-      console.log("Fetched post:", post);
+    const { slug } = await params
+    const post = await serverGet<Post>(`/public/posts/${slug}`, { next: { revalidate: 60 }, cache: "no-store" })
     const content = post.content
     const body =
       typeof content === "string"
         ? content
         : typeof content === "object" && content !== null
           ? (() => {
-              const record = content as Record<string, unknown>
-              if (typeof record.body === "string") return record.body
-              if (typeof record.text === "string") return record.text
-              return ""
-            })()
+            const record = content as Record<string, unknown>
+            if (typeof record.body === "string") return record.body
+            if (typeof record.text === "string") return record.text
+            return ""
+          })()
           : ""
 
     return (
@@ -71,7 +69,7 @@ export default async function Page({ params }: PageProps) {
         </div>
       </main>
     )
-  } catch(error) {
+  } catch (error) {
     return (
       <main className="px-6 py-12 md:py-16">
         <div className="mx-auto max-w-3xl space-y-4">

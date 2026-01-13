@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import { apiGet } from "../../../lib/api-client"
 import { formatMoney } from "../../../lib/format"
 import { isPaymentStatus, paymentStatusLabel, type PaymentStatus } from "../../../lib/payments"
@@ -17,16 +18,21 @@ type PaymentStatusResponse = {
   order_slug?: string
 }
 
-export default function Page({ params }: { params: { paymentId: string } }) {
+export default function Page() {
+  const params = useParams()
+  const paymentId = params.paymentId as string
+
   const [payment, setPayment] = useState<PaymentStatusResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!paymentId) return
+
     let interval: number
 
     const load = async () => {
       try {
-        const data = await apiGet<PaymentStatusResponse>(`/public/payments/${params.paymentId}/status`)
+        const data = await apiGet<PaymentStatusResponse>(`/public/payments/${paymentId}/status`)
         setPayment(data)
         setError(null)
       } catch (err) {
@@ -38,7 +44,7 @@ export default function Page({ params }: { params: { paymentId: string } }) {
     interval = window.setInterval(load, 5000)
 
     return () => window.clearInterval(interval)
-  }, [params.paymentId])
+  }, [paymentId])
 
   const registrationSlug = payment?.registration_slug ?? localStorage.getItem("registration_slug") ?? ""
   const status = (() => {

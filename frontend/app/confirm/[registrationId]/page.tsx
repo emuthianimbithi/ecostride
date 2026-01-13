@@ -1,21 +1,29 @@
 import { serverGet } from "../../../lib/api-server"
 
 type Registration = {
-  AthleteName: string
-  Email: string
-  Status: string
-  Slug: string
-  EventTitle?: string
-  EventSlug?: string
-  EventStartAt?: string
-  CategoryName?: string
-  CreatedAt?: string
+  athlete_name: string
+  email: string
+  status: string
+  slug: string
+  event_title?: string
+  event_slug?: string
+  event_start_at?: string
+  category_name?: string
+  created_at?: string
 }
 
-export default async function Page({ params }: { params: { registrationId: string } }) {
+type PageProps = {
+  params: Promise<{ registrationId: string }>
+}
+
+export default async function Page({ params }: PageProps) {
+  // Next.js 15+: params is a Promise, unwrap it
+  const { registrationId } = await params
+
   try {
-    const registration = await serverGet<Registration>(`/public/registrations/${params.registrationId}`, {
-      next: { revalidate: 30 }
+    const registration = await serverGet<Registration>(`/public/registrations/${registrationId}`, {
+      next: { revalidate: 30 },
+      cache: "no-store"
     })
 
     return (
@@ -26,7 +34,7 @@ export default async function Page({ params }: { params: { registrationId: strin
               Registration Confirmation
             </h1>
             <p className="text-sm text-muted-foreground md:text-base">
-              Confirmation code: {registration.Slug} • Status: {registration.Status}
+              Confirmation code: {registration.slug} • Status: {registration.status}
             </p>
           </div>
 
@@ -34,22 +42,22 @@ export default async function Page({ params }: { params: { registrationId: strin
             <div>
               <h2 className="text-lg font-semibold text-foreground">Registration details</h2>
               <p className="text-sm text-muted-foreground">
-                {registration.EventTitle || "Event"}{" "}
-                {registration.EventStartAt ? `• ${new Date(registration.EventStartAt).toLocaleDateString()}` : ""}
+                {registration.event_title || "Event"}{" "}
+                {registration.event_start_at ? `• ${new Date(registration.event_start_at).toLocaleDateString()}` : ""}
               </p>
             </div>
             <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-              <p>Athlete: {registration.AthleteName}</p>
-              <p>Email: {registration.Email}</p>
-              <p>Category: {registration.CategoryName ?? "General entry"}</p>
-              <p>Registered: {registration.CreatedAt ? new Date(registration.CreatedAt).toLocaleDateString() : "-"}</p>
+              <p>Athlete: {registration.athlete_name}</p>
+              <p>Email: {registration.email}</p>
+              <p>Category: {registration.category_name ?? "General entry"}</p>
+              <p>Registered: {registration.created_at ? new Date(registration.created_at).toLocaleDateString() : "-"}</p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
             <a
               className="inline-flex rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-              href={`/api/v1/public/registrations/${registration.Slug}/confirmation.pdf`}
+              href={`/api/v1/public/registrations/${registration.slug}/confirmation.pdf`}
             >
               Download confirmation PDF
             </a>
@@ -60,7 +68,8 @@ export default async function Page({ params }: { params: { registrationId: strin
         </div>
       </main>
     )
-  } catch {
+  } catch (err) {
+    console.error("Failed to load registration:", err)
     return (
       <main className="px-6 py-12 md:py-16">
         <div className="mx-auto max-w-4xl space-y-4">

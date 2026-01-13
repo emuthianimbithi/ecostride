@@ -4,8 +4,9 @@ import { serverGet } from "../lib/api-server"
 import { formatDate, registrationWindowLabel, registrationWindowStatus } from "../lib/format"
 import { normalizeSponsor } from "../lib/normalize-sponsor"
 
-// API response types (snake_case)
-type EventResponse = {
+// ---- API Response Types (snake_case matching backend contract) ----
+
+type EventApi = {
     slug: string
     url_slug: string
     title: string
@@ -18,7 +19,7 @@ type EventResponse = {
     results_published?: boolean
 }
 
-type PostResponse = {
+type PostApi = {
     slug: string
     url_slug: string
     title: string
@@ -26,14 +27,15 @@ type PostResponse = {
     published_at: string
 }
 
-type AlbumResponse = {
-    Slug: string
-    Title: string
-    URLSlug: string
-    Description: string
+type AlbumApi = {
+    slug: string
+    url_slug: string
+    title: string
+    description: string
 }
 
-// Internal types (PascalCase for consistency with existing code)
+// ---- UI Model Types (PascalCase for internal usage) ----
+
 type Event = {
     Slug: string
     URLSlug: string
@@ -62,47 +64,60 @@ type Album = {
     Description: string
 }
 
-// Mapper functions
-function mapEvent(event: EventResponse): Event {
+// ---- Mapper Functions (API snake_case → UI PascalCase) ----
+
+function mapEvent(api: EventApi): Event {
     return {
-        Slug: event.slug,
-        URLSlug: event.url_slug,
-        Title: event.title,
-        Type: event.type,
-        Location: event.location,
-        StartAt: event.start_at,
-        Status: event.status,
-        RegOpenAt: event.reg_open_at,
-        RegCloseAt: event.reg_close_at,
-        ResultsPublished: event.results_published
+        Slug: api.slug,
+        URLSlug: api.url_slug,
+        Title: api.title,
+        Type: api.type,
+        Location: api.location,
+        StartAt: api.start_at,
+        Status: api.status,
+        RegOpenAt: api.reg_open_at,
+        RegCloseAt: api.reg_close_at,
+        ResultsPublished: api.results_published
     }
 }
 
-function mapPost(post: PostResponse): Post {
+function mapPost(api: PostApi): Post {
     return {
-        Slug: post.slug,
-        URLSlug: post.url_slug,
-        Title: post.title,
-        Excerpt: post.excerpt,
-        PublishedAt: post.published_at
+        Slug: api.slug,
+        URLSlug: api.url_slug,
+        Title: api.title,
+        Excerpt: api.excerpt,
+        PublishedAt: api.published_at
     }
 }
 
-function mapAlbum(album: AlbumResponse): Album {
+function mapAlbum(api: AlbumApi): Album {
     return {
-        Slug: album.Slug,
-        Title: album.Title,
-        URLSlug: album.URLSlug,
-        Description: album.Description
+        Slug: api.slug,
+        Title: api.title,
+        URLSlug: api.url_slug,
+        Description: api.description
     }
 }
 
 export default async function HomePage() {
     const [eventsResponse, postsResponse, sponsors, albumsResponse] = await Promise.all([
-        serverGet<EventResponse[]>("/public/events", { next: { revalidate: 60 } }).catch(() => []),
-        serverGet<PostResponse[]>("/public/posts", { next: { revalidate: 60 } }).catch(() => []),
-        serverGet<any[]>("/public/sponsors?placement=HOME_STRIP", { next: { revalidate: 60 } }).catch(() => []),
-        serverGet<AlbumResponse[]>("/public/gallery/albums", { next: { revalidate: 60 } }).catch(() => [])
+        serverGet<EventApi[]>("/public/events").catch((err) => {
+            console.error("Failed to load events:", err)
+            return []
+        }),
+        serverGet<PostApi[]>("/public/posts").catch((err) => {
+            console.error("Failed to load posts:", err)
+            return []
+        }),
+        serverGet<any[]>("/public/sponsors?placement=HOME_STRIP").catch((err) => {
+            console.error("Failed to load sponsors:", err)
+            return []
+        }),
+        serverGet<AlbumApi[]>("/public/gallery/albums").catch((err) => {
+            console.error("Failed to load albums:", err)
+            return []
+        })
     ])
 
     // Map API responses to internal types
@@ -117,19 +132,16 @@ export default async function HomePage() {
 
     const nextEvent = upcoming[0]
     const featuredEvents = upcoming.slice(0, 3)
-    console.log("Events:", featuredEvents)
     const latestPosts = posts.slice(0, 3)
-    console.log("Posts:", latestPosts)
     const featuredAlbums = albums.slice(0, 3)
-    console.log("Albums:", albums)
 
     return (
         <main className="px-4 pb-16 sm:px-6 md:px-8">
             <section className="mx-auto mt-6 grid max-w-6xl gap-10 rounded-[32px] bg-card/80 p-8 shadow-[0_35px_70px_-50px_rgba(15,60,50,0.35)] backdrop-blur md:p-12">
                 <div className="flex flex-col gap-4">
-          <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-            EcoStride Association • Malindi
-          </span>
+                    <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                        EcoStride Association • Malindi
+                    </span>
                     <h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
                         Run, learn, and protect the coast - one community event at a time.
                     </h1>
@@ -185,11 +197,11 @@ export default async function HomePage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-3">
-                    {featuredEvents.map((event) => {
+                    {featuredEvents.map((event, idx) => {
                         const regStatus = registrationWindowStatus(event.RegOpenAt, event.RegCloseAt)
                         return (
                             <Link
-                                key={event.Slug}
+                                key={`${event.Slug}-${idx}`}
                                 href={`/events/${event.URLSlug}`}
                                 className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
                             >
@@ -197,10 +209,10 @@ export default async function HomePage() {
                                     <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">{event.Type}</span>
                                     <span
                                         className={`text-xs font-semibold ${regStatus === "open" ? "text-emerald-600" : regStatus === "closed" ? "text-rose-600" : "text-amber-600"
-                                        }`}
+                                            }`}
                                     >
-                    {registrationWindowLabel(event.RegOpenAt, event.RegCloseAt)}
-                  </span>
+                                        {registrationWindowLabel(event.RegOpenAt, event.RegCloseAt)}
+                                    </span>
                                 </div>
                                 <h3 className="mt-4 text-lg font-semibold text-foreground group-hover:text-primary">{event.Title}</h3>
                                 <p className="mt-1 text-sm text-muted-foreground">{event.Location}</p>
@@ -262,26 +274,26 @@ export default async function HomePage() {
                     </Link>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                    {normalizedSponsors.map((sponsor) => (
+                    {normalizedSponsors.map((sponsor, idx) => (
                         <Link
-                            key={sponsor.slug}
+                            key={`${sponsor.slug}-${idx}`}
                             href={`/sponsors/${sponsor.url_slug}`}
                             className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                         >
                             {sponsor.logo.url ? (
                                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                  <Image
-                      src={sponsor.logo.url}
-                      alt={sponsor.logo.alt || sponsor.name}
-                      width={64}
-                      height={64}
-                      className="h-8 w-8 object-contain"
-                  />
-                </span>
+                                    <Image
+                                        src={sponsor.logo.url}
+                                        alt={sponsor.logo.alt || sponsor.name}
+                                        width={64}
+                                        height={64}
+                                        className="h-8 w-8 object-contain"
+                                    />
+                                </span>
                             ) : (
                                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-xs font-semibold text-foreground">
-                  {sponsor.name.slice(0, 2).toUpperCase()}
-                </span>
+                                    {sponsor.name.slice(0, 2).toUpperCase()}
+                                </span>
                             )}
                             <span className="font-medium text-foreground">{sponsor.name}</span>
                         </Link>
@@ -303,9 +315,9 @@ export default async function HomePage() {
                     </Link>
                 </div>
                 <div className="grid gap-4 md:grid-cols-3">
-                    {latestPosts.map((post) => (
+                    {latestPosts.map((post, idx) => (
                         <Link
-                            key={post.Slug}
+                            key={`${post.Slug}-${idx}`}
                             href={`/blog/${post.URLSlug}`}
                             className="rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
                         >
@@ -333,9 +345,9 @@ export default async function HomePage() {
                     </Link>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                    {featuredAlbums.map((album) => (
+                    {featuredAlbums.map((album, idx) => (
                         <Link
-                            key={album.Slug}
+                            key={`${album.Slug}-${idx}`}
                             href={`/gallery/${album.URLSlug}`}
                             className="rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
                         >

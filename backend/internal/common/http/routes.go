@@ -24,6 +24,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.GET("/pages/:slug", handlers.CMS.GetPublishedPage)
 	public.GET("/pages", handlers.CMS.ListPages)
 	public.GET("/posts", handlers.CMS.ListPublicPosts)
+	public.GET("/posts/:slug", handlers.CMS.GetPublishedPost)
 	public.GET("x:slug", handlers.CMS.GetPublishedPost)
 	public.GET("/hero-styles", handlers.CMS.ListHeroStyles)
 	public.GET("/gallery/albums", handlers.CMS.GetGalleryAlbums)

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -485,7 +486,7 @@ func (s *Service) MpesaAccessToken(ctx context.Context) (string, error) {
 
 	var payload struct {
 		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		ExpiresIn   string `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return "", err
@@ -494,8 +495,13 @@ func (s *Service) MpesaAccessToken(ctx context.Context) (string, error) {
 	if payload.AccessToken == "" {
 		return "", errors.New("mpesa token missing")
 	}
+	// convert string to int
+	expiresInt, err := strconv.Atoi(payload.ExpiresIn)
+	if err != nil {
+		return "", err
+	}
 
-	expires := time.Duration(payload.ExpiresIn) * time.Second
+	expires := time.Duration(expiresInt) * time.Second
 	if expires > 30*time.Second {
 		expires -= 30 * time.Second
 	}

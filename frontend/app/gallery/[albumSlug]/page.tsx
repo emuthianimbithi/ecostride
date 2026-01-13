@@ -3,9 +3,9 @@ import Link from "next/link"
 import { serverGet } from "../../../lib/api-server"
 
 type Album = {
-  Title: string
-  Description: string
-  URLSlug: string
+  title: string
+  description: string
+  url_slug: string
 }
 
 type MediaItem = {
@@ -22,10 +22,18 @@ type AlbumResponse = {
   media: MediaItem[]
 }
 
-export default async function Page({ params }: { params: { albumSlug: string } }) {
+type PageProps = {
+  params: Promise<{ albumSlug: string }>
+}
+
+export default async function Page({ params }: PageProps) {
+  // Next.js 15+: params is a Promise, unwrap it
+  const { albumSlug } = await params
+
   try {
-    const data = await serverGet<AlbumResponse>(`/public/gallery/albums/${params.albumSlug}`, {
-      next: { revalidate: 60 }
+    const data = await serverGet<AlbumResponse>(`/public/gallery/albums/${albumSlug}`, {
+      next: { revalidate: 60 },
+      cache: "no-store"
     })
 
     return (
@@ -35,8 +43,8 @@ export default async function Page({ params }: { params: { albumSlug: string } }
             <Link className="text-xs uppercase tracking-[0.2em] text-muted-foreground" href="/gallery">
               Back to gallery
             </Link>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{data.album.Title}</h1>
-            <p className="text-sm text-muted-foreground md:text-base">{data.album.Description}</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{data.album.title}</h1>
+            <p className="text-sm text-muted-foreground md:text-base">{data.album.description}</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -45,7 +53,7 @@ export default async function Page({ params }: { params: { albumSlug: string } }
                 {item.url ? (
                   <Image
                     src={item.url}
-                    alt={item.alt_text || data.album.Title}
+                    alt={item.alt_text || data.album.title}
                     width={800}
                     height={600}
                     className="h-56 w-full rounded-xl object-cover"
@@ -67,7 +75,8 @@ export default async function Page({ params }: { params: { albumSlug: string } }
         </div>
       </main>
     )
-  } catch {
+  } catch (err) {
+    console.error("Failed to load album:", err)
     return (
       <main className="px-6 py-12 md:py-16">
         <div className="mx-auto max-w-4xl space-y-4">

@@ -5,30 +5,30 @@ import { apiGet, apiPost } from "../../../lib/api-client"
 import { useToast } from "../../../components/toast"
 
 type Role = {
-  Slug: string
-  Name: string
-  Description: string
-  Permissions?: Permission[]
+  slug: string
+  name: string
+  description: string
+  permissions?: Permission[]
 }
 
 type Permission = {
-  Key: string
-  Description: string
+  key: string
+  description: string
 }
 
 type User = {
-  Slug: string
-  Name: string
-  Email: string
-  IsActive: boolean
-  Roles?: Role[]
+  slug: string
+  name: string
+  email: string
+  is_active: boolean
+  roles?: Role[]
 }
 
 // Group permissions by domain for better organization
 function groupPermissionsByDomain(permissions: Permission[]): Record<string, Permission[]> {
   const groups: Record<string, Permission[]> = {}
   for (const perm of permissions) {
-    const domain = perm.Key.split(".")[0] || "other"
+    const domain = perm.key.split(".")[0] || "other"
     if (!groups[domain]) groups[domain] = []
     groups[domain].push(perm)
   }
@@ -133,7 +133,7 @@ export default function Page() {
     const filtered: Record<string, Permission[]> = {}
     for (const [domain, perms] of Object.entries(groupedPermissions)) {
       const matching = perms.filter(
-        (p) => p.Key.toLowerCase().includes(search) || p.Description.toLowerCase().includes(search)
+        (p) => p.key.toLowerCase().includes(search) || p.description.toLowerCase().includes(search)
       )
       if (matching.length > 0) filtered[domain] = matching
     }
@@ -183,7 +183,7 @@ export default function Page() {
   const handleAssignRoles = async () => {
     if (!assignModal) return
     try {
-      await apiPost(`/admin/users/${assignModal.user.Slug}/roles`, {
+      await apiPost(`/admin/users/${assignModal.user.slug}/roles`, {
         role_slugs: assignRoleSlugs
       })
       toast({ title: "Roles updated", variant: "success" })
@@ -196,12 +196,12 @@ export default function Page() {
 
   const openAssignModal = (user: User) => {
     setAssignModal({ user })
-    setAssignRoleSlugs((user.Roles ?? []).map((r) => r.Slug))
+    setAssignRoleSlugs((user.roles ?? []).map((r) => r.slug))
   }
 
   const toggleAllInDomain = (domain: string, checked: boolean) => {
     const domainPerms = groupedPermissions[domain] ?? []
-    const domainKeys = domainPerms.map((p) => p.Key)
+    const domainKeys = domainPerms.map((p) => p.key)
     if (checked) {
       setNewRole((prev) => ({
         ...prev,
@@ -285,18 +285,18 @@ export default function Page() {
               <label className="block text-xs text-slate-500 mb-2">Assign Roles</label>
               <div className="flex flex-wrap gap-2">
                 {roles.map((role) => (
-                  <label key={role.Slug} className="flex items-center gap-1.5 text-sm bg-slate-50 rounded-lg px-2 py-1">
+                  <label key={role.slug} className="flex items-center gap-1.5 text-sm bg-slate-50 rounded-lg px-2 py-1">
                     <input
                       type="checkbox"
-                      checked={newUser.roleSlugs.includes(role.Slug)}
+                      checked={newUser.roleSlugs.includes(role.slug)}
                       onChange={(e) => {
                         const roleSlugs = e.target.checked
-                          ? [...newUser.roleSlugs, role.Slug]
-                          : newUser.roleSlugs.filter((s) => s !== role.Slug)
+                          ? [...newUser.roleSlugs, role.slug]
+                          : newUser.roleSlugs.filter((s) => s !== role.slug)
                         setNewUser({ ...newUser, roleSlugs })
                       }}
                     />
-                    <span>{role.Name}</span>
+                    <span>{role.name}</span>
                   </label>
                 ))}
               </div>
@@ -325,21 +325,21 @@ export default function Page() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {users.map((user) => (
-                    <tr key={user.Slug}>
-                      <td className="py-2 font-medium text-slate-800">{user.Name}</td>
-                      <td className="text-slate-600">{user.Email}</td>
+                    <tr key={user.slug}>
+                      <td className="py-2 font-medium text-slate-800">{user.name}</td>
+                      <td className="text-slate-600">{user.email}</td>
                       <td>
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${user.IsActive ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
-                          {user.IsActive ? "Active" : "Inactive"}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${user.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+                          {user.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
                       <td className="text-slate-600">
-                        {(user.Roles ?? []).map((role) => (
-                          <span key={role.Slug} className="mr-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs">
-                            {role.Name}
+                        {(user.roles ?? []).map((role) => (
+                          <span key={role.slug} className="mr-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                            {role.name}
                           </span>
                         ))}
-                        {(user.Roles ?? []).length === 0 && <span className="text-slate-400">None</span>}
+                        {(user.roles ?? []).length === 0 && <span className="text-slate-400">None</span>}
                       </td>
                       <td className="text-right">
                         <button
@@ -394,8 +394,8 @@ export default function Page() {
               </div>
               <div className="max-h-64 overflow-y-auto space-y-3">
                 {Object.entries(filteredGroupedPermissions).map(([domain, perms]) => {
-                  const allSelected = perms.every((p) => newRole.permissionKeys.includes(p.Key))
-                  const someSelected = perms.some((p) => newRole.permissionKeys.includes(p.Key))
+                  const allSelected = perms.every((p) => newRole.permissionKeys.includes(p.key))
+                  const someSelected = perms.some((p) => newRole.permissionKeys.includes(p.key))
                   return (
                     <div key={domain} className="border border-slate-100 rounded-lg p-2">
                       <div className="flex items-center gap-2 mb-1">
@@ -411,18 +411,18 @@ export default function Page() {
                       </div>
                       <div className="grid grid-cols-2 gap-1 pl-5">
                         {perms.map((perm) => (
-                          <label key={perm.Key} className="flex items-center gap-1.5 text-xs">
+                          <label key={perm.key} className="flex items-center gap-1.5 text-xs">
                             <input
                               type="checkbox"
-                              checked={newRole.permissionKeys.includes(perm.Key)}
+                              checked={newRole.permissionKeys.includes(perm.key)}
                               onChange={(e) => {
                                 const permissionKeys = e.target.checked
-                                  ? [...newRole.permissionKeys, perm.Key]
-                                  : newRole.permissionKeys.filter((k) => k !== perm.Key)
+                                  ? [...newRole.permissionKeys, perm.key]
+                                  : newRole.permissionKeys.filter((k) => k !== perm.key)
                                 setNewRole({ ...newRole, permissionKeys })
                               }}
                             />
-                            <span className="text-slate-600" title={perm.Description}>{perm.Key}</span>
+                            <span className="text-slate-600" title={perm.description}>{perm.key}</span>
                           </label>
                         ))}
                       </div>
@@ -454,13 +454,13 @@ export default function Page() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {roles.map((role) => (
-                    <tr key={role.Slug}>
-                      <td className="py-2 font-medium text-slate-800">{role.Name}</td>
-                      <td className="text-slate-600">{role.Description}</td>
+                    <tr key={role.slug}>
+                      <td className="py-2 font-medium text-slate-800">{role.name}</td>
+                      <td className="text-slate-600">{role.description}</td>
                       <td>
                         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs">
                           <ShieldIcon />
-                          {role.Permissions?.length ?? 0} permissions
+                          {role.permissions?.length ?? 0} permissions
                         </span>
                       </td>
                       <td className="text-right">
@@ -486,24 +486,24 @@ export default function Page() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800">
-              Assign Roles to {assignModal.user.Name}
+              Assign Roles to {assignModal.user.name}
             </h3>
             <div className="mt-4 space-y-2">
               {roles.map((role) => (
-                <label key={role.Slug} className="flex items-center gap-2 text-sm">
+                <label key={role.slug} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={assignRoleSlugs.includes(role.Slug)}
+                    checked={assignRoleSlugs.includes(role.slug)}
                     onChange={(e) => {
                       setAssignRoleSlugs(
                         e.target.checked
-                          ? [...assignRoleSlugs, role.Slug]
-                          : assignRoleSlugs.filter((s) => s !== role.Slug)
+                          ? [...assignRoleSlugs, role.slug]
+                          : assignRoleSlugs.filter((s) => s !== role.slug)
                       )
                     }}
                   />
-                  <span className="font-medium">{role.Name}</span>
-                  <span className="text-slate-500">({role.Permissions?.length ?? 0} permissions)</span>
+                  <span className="font-medium">{role.name}</span>
+                  <span className="text-slate-500">({role.permissions?.length ?? 0} permissions)</span>
                 </label>
               ))}
             </div>

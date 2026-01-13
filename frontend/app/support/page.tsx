@@ -65,7 +65,7 @@ export default function Page() {
       const customAmount = values.customAmount ? Number(values.customAmount) : undefined
       const customAmountMinor = customAmount ? Math.round(customAmount * 100) : undefined
 
-      const order = await apiPost<{ Slug: string }>("/public/shop/orders", {
+      const order = await apiPost<{ slug: string }>("/public/shop/orders", {
         buyer_name: values.name,
         email: values.email,
         phone: values.phone,
@@ -82,7 +82,7 @@ export default function Page() {
       if (values.paymentMethod === "stripe") {
         setStatus("Redirecting to Stripe...")
         const data = await apiPost<{ checkout_url: string }>(
-          `/public/shop/orders/${order.Slug}/pay/stripe`,
+          `/public/shop/orders/${order.slug}/pay/stripe`,
           {},
           { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
         )
@@ -97,7 +97,7 @@ export default function Page() {
 
       setStatus("Triggering M-Pesa STK...")
       const payment = await apiPost<{ payment_id: string }>(
-        `/public/shop/orders/${order.Slug}/pay/mpesa`,
+        `/public/shop/orders/${order.slug}/pay/mpesa`,
         { phone: mpesaPhone },
         { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
       )
@@ -107,6 +107,7 @@ export default function Page() {
       setStatus(null)
       setError(err instanceof Error ? err.message : "Checkout failed")
     }
+
   })
 
   return (
@@ -134,10 +135,22 @@ export default function Page() {
                 >
                   <div className="font-semibold text-foreground">{product.name}</div>
                   <div className="text-xs text-muted-foreground">{product.description}</div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {formatMoney("KES", product.price_kes_minor)} • {formatMoney("USD", product.price_usd_minor)} •{" "}
-                    {formatMoney("EUR", product.price_eur_minor)}
-                  </div>
+                    {[
+                        product.price_kes_minor != null ? formatMoney("KES", product.price_kes_minor) : null,
+                        product.price_usd_minor != null ? formatMoney("USD", product.price_usd_minor) : null,
+                        product.price_eur_minor != null ? formatMoney("EUR", product.price_eur_minor) : null,
+                    ].filter(Boolean).length > 0 && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                            {[
+                                product.price_kes_minor != null ? formatMoney("KES", product.price_kes_minor) : null,
+                                product.price_usd_minor != null ? formatMoney("USD", product.price_usd_minor) : null,
+                                product.price_eur_minor != null ? formatMoney("EUR", product.price_eur_minor) : null,
+                            ]
+                                .filter(Boolean)
+                                .join(" • ")}
+                        </div>
+                    )}
+
                 </button>
               ))}
               {products.length === 0 && (

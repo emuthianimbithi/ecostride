@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState, use } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -10,36 +10,38 @@ import { formatDate, registrationWindowStatus } from "../../../lib/format"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
 
+// ---- snake_case Types ----
+
 type EventCategory = {
-  Slug: string
-  Name: string
-  PriceKESMinor: number
-  PriceUSDMinor?: number
-  PriceEURMinor?: number
+  slug: string
+  name: string
+  price_kes_minor: number
+  price_usd_minor?: number
+  price_eur_minor?: number
 }
 
 type EventDetails = {
-  Title: string
-  Description: string
-  Status: string
-  RegOpenAt?: string | null
-  RegCloseAt?: string | null
-  StartAt?: string | null
+  title: string
+  description: string
+  status: string
+  reg_open_at?: string | null
+  reg_close_at?: string | null
+  start_at?: string | null
 }
 
 type Waiver = {
-  Title: string
-  Content: string
+  title: string
+  content: string
 }
 
 type EventFormField = {
-  Slug: string
-  Key: string
-  Label: string
-  Type: string
-  Required: boolean
-  Options?: unknown
-  Order: number
+  slug: string
+  key: string
+  label: string
+  type: string
+  required: boolean
+  options?: unknown
+  order: number
 }
 
 const registrationSchema = z.object({
@@ -67,7 +69,11 @@ type RegistrationForm = z.infer<typeof registrationSchema>
 
 const steps = ["Category", "Athlete", "Extras", "Waiver", "Payment"]
 
-export default function Page({ params }: { params: { eventSlug: string } }) {
+export default function Page() {
+  // Use useParams for Client Component dynamic routes
+  const params = useParams()
+  const eventSlug = params.eventSlug as string
+
   const router = useRouter()
   const { toast } = useToast()
   const [event, setEvent] = useState<EventDetails | null>(null)
@@ -96,8 +102,19 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
   const stepFields = useMemo(
     () => [
       ["categorySlug"],
-      ["athleteName", "email", "phone"],
-      ["extras"],
+      [
+        "athleteName",
+        "email",
+        "phone",
+        "dob",
+        "gender",
+        "nationality",
+        "residence",
+        "tshirtSize",
+        "emergencyName",
+        "emergencyPhone"
+      ],
+      ["medicalDeclaration", "experience", "extras"],
       ["waiverAccepted"],
       ["paymentMethod", "currency", "mpesaPhone"]
     ],
@@ -105,26 +122,28 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
   )
 
   useEffect(() => {
-    apiGet<EventDetails>(`/public/events/${params.eventSlug}`)
+    if (!eventSlug) return
+
+    apiGet<EventDetails>(`/public/events/${eventSlug}`)
       .then(setEvent)
       .catch(() => setEvent(null))
 
-    apiGet<EventCategory[]>(`/public/events/${params.eventSlug}/categories`)
+    apiGet<EventCategory[]>(`/public/events/${eventSlug}/categories`)
       .then(setCategories)
       .catch(() => setCategories([]))
 
-    apiGet<Waiver>(`/public/events/${params.eventSlug}/waiver/current`)
+    apiGet<Waiver>(`/public/events/${eventSlug}/waiver/current`)
       .then(setWaiver)
       .catch(() => setWaiver(null))
 
-    apiGet<EventFormField[]>(`/public/events/${params.eventSlug}/form-fields`)
-      .then((data) => setFormFields([...data].sort((a, b) => (a.Order ?? 0) - (b.Order ?? 0))))
+    apiGet<EventFormField[]>(`/public/events/${eventSlug}/form-fields`)
+      .then((data) => setFormFields([...data].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))))
       .catch(() => setFormFields([]))
-  }, [params.eventSlug])
+  }, [eventSlug])
 
   const nextStep = async () => {
     setError(null)
-    if (event && registrationWindowStatus(event.RegOpenAt, event.RegCloseAt) === "closed") {
+    if (event && registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed") {
       setError("Registration is closed for this event.")
       toast({ title: "Registration closed", description: "Registration is closed for this event.", variant: "destructive" })
       return
@@ -132,16 +151,16 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
     if (step === 2 && formFields.length > 0) {
       const errors: Record<string, string> = {}
       formFields.forEach((field) => {
-        if (!field.Required) return
-        const value = fieldValues[field.Key]
-        if (field.Type === "checkbox") {
+        if (!field.required) return
+        const value = fieldValues[field.key]
+        if (field.type === "checkbox") {
           if (value !== true) {
-            errors[field.Key] = "This field is required."
+            errors[field.key] = "This field is required."
           }
           return
         }
         if (value === undefined || value === null || String(value).trim() === "") {
-          errors[field.Key] = "This field is required."
+          errors[field.key] = "This field is required."
         }
       })
       setFieldErrors(errors)
@@ -164,15 +183,19 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
       }
     }
     setStep((prev) => Math.min(prev + 1, steps.length - 1))
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const prevStep = () => setStep((prev) => Math.max(prev - 1, 0))
+  const prevStep = () => {
+    setStep((prev) => Math.max(prev - 1, 0))
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   const getCategoryPrice = (currency: string, category?: EventCategory | null) => {
     if (!category) return 0
-    if (currency === "USD" && category.PriceUSDMinor) return category.PriceUSDMinor
-    if (currency === "EUR" && category.PriceEURMinor) return category.PriceEURMinor
-    return category.PriceKESMinor
+    if (currency === "USD" && category.price_usd_minor) return category.price_usd_minor
+    if (currency === "EUR" && category.price_eur_minor) return category.price_eur_minor
+    return category.price_kes_minor
   }
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -180,7 +203,7 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
     setStatus("Creating registration...")
 
     try {
-      const chosenCategory = categories.find((category) => category.Slug === values.categorySlug)
+      const chosenCategory = categories.find((category) => category.slug === values.categorySlug)
       const currency = values.currency ?? "KES"
       const priceMinor = getCategoryPrice(currency, chosenCategory)
       const requiresPayment = priceMinor > 0
@@ -192,8 +215,9 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
         extrasPayload.form_fields = fieldValues
       }
 
-      const registration = await apiPost<{ Slug: string }>("/public/registrations", {
-        event_slug: params.eventSlug,
+      // Backend expects snake_case payload
+      const registration = await apiPost<{Slug: string}>("/public/registrations", {
+        event_slug: eventSlug,
         category_slug: values.categorySlug || undefined,
         athlete_name: values.athleteName,
         email: values.email,
@@ -209,6 +233,8 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
         experience: values.experience,
         extras: extrasPayload
       })
+
+        console.log('registration', registration);
 
       localStorage.setItem("registration_slug", registration.Slug)
 
@@ -248,22 +274,40 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
     }
   })
 
+  if (!event) {
+    if (error) {
+      return (
+        <main className="px-6 py-12 md:py-16">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Event not found</h1>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
+        </main>
+      )
+    }
+    return (
+      <main className="px-6 py-12 md:py-16">
+        <div className="mx-auto max-w-4xl space-y-4">
+          <p className="text-sm text-muted-foreground">Loading event...</p>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="px-6 py-12 md:py-16">
       <div className="mx-auto max-w-4xl space-y-8">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Register</h1>
-          <p className="text-sm text-muted-foreground md:text-base">{event?.Title || "Loading event..."}</p>
-          {event && (
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              {registrationWindowStatus(event.RegOpenAt, event.RegCloseAt) === "closed"
-                ? "Registration closed"
-                : `Event date ${formatDate(event.StartAt)}`}
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground md:text-base">{event.title}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            {registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed"
+              ? "Registration closed"
+              : `Event date ${formatDate(event.start_at)}`}
+          </p>
         </div>
 
-        {event && registrationWindowStatus(event.RegOpenAt, event.RegCloseAt) === "closed" && (
+        {registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed" && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             Registration is closed. Explore other upcoming events instead.
           </div>
@@ -287,12 +331,12 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
               <div className="grid gap-3">
                 {categories.map((category) => (
                   <label
-                    key={category.Slug}
+                    key={category.slug}
                     className="flex items-center gap-3 rounded-xl border border-border/60 bg-background p-3 text-sm text-foreground"
                   >
-                    <input type="radio" value={category.Slug} {...form.register("categorySlug")} />
+                    <input type="radio" value={category.slug} {...form.register("categorySlug")} />
                     <span>
-                      {category.Name} • KES {(category.PriceKESMinor / 100).toFixed(2)}
+                      {category.name} • KES {(category.price_kes_minor / 100).toFixed(2)}
                     </span>
                   </label>
                 ))}
@@ -372,9 +416,9 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
                   </h3>
                   <div className="grid gap-4">
                     {formFields.map((field) => {
-                      const requiredMark = field.Required ? "*" : ""
-                      const value = fieldValues[field.Key]
-                      const options = Array.isArray(field.Options) ? field.Options : []
+                      const requiredMark = field.required ? "*" : ""
+                      const value = fieldValues[field.key]
+                      const options = Array.isArray(field.options) ? field.options : []
                       const normalizedOptions = options
                         .map((option) => {
                           if (typeof option === "string") return { value: option, label: option }
@@ -388,67 +432,67 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
                         })
                         .filter(Boolean) as Array<{ value: string; label: string }>
 
-                      if (field.Type === "checkbox") {
+                      if (field.type === "checkbox") {
                         return (
-                          <label key={field.Slug} className="flex items-center gap-3 text-sm text-foreground">
+                          <label key={field.slug} className="flex items-center gap-3 text-sm text-foreground">
                             <input
                               type="checkbox"
                               checked={value === true}
                               onChange={(e) =>
-                                setFieldValues((prev) => ({ ...prev, [field.Key]: e.target.checked }))
+                                setFieldValues((prev) => ({ ...prev, [field.key]: e.target.checked }))
                               }
                             />
                             <span>
-                              {field.Label} {requiredMark}
+                              {field.label} {requiredMark}
                             </span>
                           </label>
                         )
                       }
 
-                      if (field.Type === "select") {
+                      if (field.type === "select") {
                         return (
-                          <label key={field.Slug} className="space-y-2 text-sm text-foreground">
+                          <label key={field.slug} className="space-y-2 text-sm text-foreground">
                             <span>
-                              {field.Label} {requiredMark}
+                              {field.label} {requiredMark}
                             </span>
                             <select
                               value={typeof value === "string" ? value : ""}
                               onChange={(e) => {
-                                setFieldErrors((prev) => ({ ...prev, [field.Key]: "" }))
-                                setFieldValues((prev) => ({ ...prev, [field.Key]: e.target.value }))
+                                setFieldErrors((prev) => ({ ...prev, [field.key]: "" }))
+                                setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))
                               }}
                               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                             >
                               <option value="">Select an option</option>
-                              {normalizedOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
+                              {normalizedOptions.map((option, idx) => (
+                                <option key={`${option.value}_${idx}`} value={option.value}>
                                   {option.label}
                                 </option>
                               ))}
                             </select>
-                            {fieldErrors[field.Key] && (
-                              <p className="text-sm text-destructive">{fieldErrors[field.Key]}</p>
+                            {fieldErrors[field.key] && (
+                              <p className="text-sm text-destructive">{fieldErrors[field.key]}</p>
                             )}
                           </label>
                         )
                       }
 
                       return (
-                        <label key={field.Slug} className="space-y-2 text-sm text-foreground">
+                        <label key={field.slug} className="space-y-2 text-sm text-foreground">
                           <span>
-                            {field.Label} {requiredMark}
+                            {field.label} {requiredMark}
                           </span>
                           <input
-                            type={field.Type === "number" ? "number" : field.Type === "date" ? "date" : "text"}
+                            type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
                             value={value === undefined ? "" : String(value)}
                             onChange={(e) => {
-                              setFieldErrors((prev) => ({ ...prev, [field.Key]: "" }))
-                              setFieldValues((prev) => ({ ...prev, [field.Key]: e.target.value }))
+                              setFieldErrors((prev) => ({ ...prev, [field.key]: "" }))
+                              setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))
                             }}
                             className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                           />
-                          {fieldErrors[field.Key] && (
-                            <p className="text-sm text-destructive">{fieldErrors[field.Key]}</p>
+                          {fieldErrors[field.key] && (
+                            <p className="text-sm text-destructive">{fieldErrors[field.key]}</p>
                           )}
                         </label>
                       )
@@ -479,8 +523,8 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
 
           {step === 3 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground">{waiver?.Title || "Waiver"}</h2>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{waiver?.Content}</p>
+              <h2 className="text-lg font-semibold text-foreground">{waiver?.title || "Waiver"}</h2>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{waiver?.content}</p>
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <input type="checkbox" {...form.register("waiverAccepted")} />
                 I accept the waiver terms
@@ -494,14 +538,14 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
           {step === 4 && (
             <div className="space-y-4">
               {(() => {
-                const selectedCategory = categories.find((category) => category.Slug === form.watch("categorySlug"))
+                const selectedCategory = categories.find((category) => category.slug === form.watch("categorySlug"))
                 const currency = form.watch("currency") || "KES"
                 const priceMinor =
                   currency === "USD"
-                    ? selectedCategory?.PriceUSDMinor ?? 0
+                    ? selectedCategory?.price_usd_minor ?? 0
                     : currency === "EUR"
-                      ? selectedCategory?.PriceEURMinor ?? 0
-                      : selectedCategory?.PriceKESMinor ?? 0
+                      ? selectedCategory?.price_eur_minor ?? 0
+                      : selectedCategory?.price_kes_minor ?? 0
                 const isFree = categories.length === 0 || priceMinor === 0
 
                 if (isFree) {
@@ -562,7 +606,7 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
                 type="button"
                 onClick={nextStep}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-                disabled={!!event && registrationWindowStatus(event.RegOpenAt, event.RegCloseAt) === "closed"}
+                disabled={!!event && registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed"}
               >
                 Continue
               </button>
@@ -570,7 +614,7 @@ export default function Page({ params }: { params: { eventSlug: string } }) {
               <button
                 type="submit"
                 className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-                disabled={!!event && registrationWindowStatus(event.RegOpenAt, event.RegCloseAt) === "closed"}
+                disabled={!!event && registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed"}
               >
                 Submit registration
               </button>

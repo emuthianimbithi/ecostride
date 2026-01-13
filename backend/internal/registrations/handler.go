@@ -75,18 +75,18 @@ type updateRequest struct {
 }
 
 type registrationExportRow struct {
-	RegistrationSlug string
-	EventTitle       string
-	CategoryName     *string
-	AthleteName      string
-	Email            string
-	Phone            string
-	Gender           string
-	Nationality      string
-	Residence        string
-	Status           string
-	BibNumber        *int
-	CreatedAt        time.Time
+	RegistrationSlug string    `json:"registration_slug"`
+	EventTitle       string    `json:"event_title"`
+	CategoryName     *string   `json:"category_name"`
+	AthleteName      string    `json:"athlete_name"`
+	Email            string    `json:"email"`
+	Phone            string    `json:"phone"`
+	Gender           string    `json:"gender"`
+	Nationality      string    `json:"nationality"`
+	Residence        string    `json:"residence"`
+	Status           string    `json:"status"`
+	BibNumber        *int      `json:"bib_number"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 type registrationJobPayload struct {
@@ -94,37 +94,37 @@ type registrationJobPayload struct {
 }
 
 type registrationPublicDetail struct {
-	Slug         string
-	AthleteName  string
-	Email        string
-	Status       string
-	EventSlug    string
-	EventTitle   string
-	EventStartAt time.Time
-	CategoryName *string
-	CreatedAt    time.Time
+	Slug         string    `json:"slug"`
+	AthleteName  string    `json:"athlete_name"`
+	Email        string    `json:"email"`
+	Status       string    `json:"status"`
+	EventSlug    string    `json:"event_slug"`
+	EventTitle   string    `json:"event_title"`
+	EventStartAt time.Time `json:"event_start_at"`
+	CategoryName *string   `json:"category_name"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type registrationListItem struct {
-	Slug               string
-	AthleteName        string
-	Email              string
-	Phone              string
-	Status             string
-	EventSlug          string
-	EventTitle         string
-	EventStartAt       time.Time
-	EventType          string
-	CategoryName       *string
-	BibNumber          *int
-	PaymentStatus      *string
-	PaymentAmountMinor *int
-	PaymentCurrency    *string
-	PaymentProvider    *string
-	CheckedInAt        *time.Time
-	BibCollectedAt     *time.Time
-	PackCollectedAt    *time.Time
-	CreatedAt          time.Time
+	Slug               string     `json:"slug"`
+	AthleteName        string     `json:"athlete_name"`
+	Email              string     `json:"email"`
+	Phone              string     `json:"phone"`
+	Status             string     `json:"status"`
+	EventSlug          string     `json:"event_slug"`
+	EventTitle         string     `json:"event_title"`
+	EventStartAt       time.Time  `json:"event_start_at"`
+	EventType          string     `json:"event_type"`
+	CategoryName       *string    `json:"category_name"`
+	BibNumber          *int       `json:"bib_number"`
+	PaymentStatus      *string    `json:"payment_status"`
+	PaymentAmountMinor *int       `json:"payment_amount_minor"`
+	PaymentCurrency    *string    `json:"payment_currency"`
+	PaymentProvider    *string    `json:"payment_provider"`
+	CheckedInAt        *time.Time `json:"checked_in_at"`
+	BibCollectedAt     *time.Time `json:"bib_collected_at"`
+	PackCollectedAt    *time.Time `json:"pack_collected_at"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 func (h *Handler) CreatePublicRegistration(c *gin.Context) {

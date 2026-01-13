@@ -17,10 +17,11 @@ const volunteerSchema = z.object({
 
 type VolunteerForm = z.infer<typeof volunteerSchema>
 
+// snake_case matching backend API
 type Event = {
-  URLSlug: string
-  Title: string
-  StartAt: string
+  url_slug: string
+  title: string
+  start_at: string
 }
 
 export default function Page() {
@@ -91,9 +92,9 @@ export default function Page() {
             {...form.register("eventSlug")}
           >
             <option value="">Any event</option>
-            {events.map((event) => (
-              <option key={event.URLSlug} value={event.URLSlug}>
-                {event.Title} {event.StartAt ? `(${new Date(event.StartAt).toLocaleDateString()})` : ""}
+            {events.map((event, idx) => (
+              <option key={`${event.url_slug}-${idx}`} value={event.url_slug}>
+                {event.title} {event.start_at ? `(${new Date(event.start_at).toLocaleDateString()})` : ""}
               </option>
             ))}
           </select>

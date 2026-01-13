@@ -33,8 +33,8 @@ type eventRequest struct {
 	Title       string  `json:"title" binding:"required"`
 	Description string  `json:"description"`
 	Location    string  `json:"location"`
-	MapURL      string  `json:"MapURL"`
-	StartAt     string  `json:"StartAt" binding:"required"`
+	MapURL      string  `json:"map_url"`
+	StartAt     string  `json:"start_at" binding:"required"`
 	RegOpenAt   *string `json:"reg_open_at"`
 	RegCloseAt  *string `json:"reg_close_at"`
 	Status      string  `json:"status"`
@@ -66,7 +66,11 @@ type formFieldRequest struct {
 }
 
 func (h *Handler) ListPublicEvents(c *gin.Context) {
-	events, err := h.Service.ListEvents(c.Request.Context(), "published")
+	// get search params if any (e.g., date range, location) - omitted for brevity
+	// search
+	search := c.Query("search")
+	eventtype := c.Query("type")
+	events, err := h.Service.ListEvents(c.Request.Context(), "published", search, eventtype)
 	if err != nil {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to list events", nil)
 		return
@@ -136,7 +140,9 @@ func (h *Handler) GetCurrentWaiver(c *gin.Context) {
 
 func (h *Handler) ListEvents(c *gin.Context) {
 	status := c.Query("status")
-	events, err := h.Service.ListEvents(c.Request.Context(), status)
+	search := c.Query("search")
+	evenType := c.Query("type")
+	events, err := h.Service.ListEvents(c.Request.Context(), status, search, evenType)
 	if err != nil {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to list events", nil)
 		return

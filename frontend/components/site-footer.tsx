@@ -16,10 +16,10 @@ const quickLinks = [
 ]
 
 type CMSPage = {
-    ID: number
-    URLSlug: string
-    Title: string
-    Status: string
+    slug: string
+    url_slug: string
+    title: string
+    status: string
 }
 
 export function SiteFooter() {
@@ -30,15 +30,16 @@ export function SiteFooter() {
         ;(async () => {
             try {
                 const data = await apiGet<any[]>("/public/pages?status=published")
+                console.log("Fetched CMS pages for footer:", data)
                 const published = (Array.isArray(data) ? data : [])
-                    .filter((p) => String(p?.Status ?? "").toLowerCase() === "published")
+                    .filter((p) => String(p?.status ?? "").toLowerCase() === "published")
                     .map((p) => ({
-                        ID: Number(p.ID),
-                        URLSlug: String(p.URLSlug ?? ""),
-                        Title: String(p.Title ?? ""),
-                        Status: String(p.Status ?? "")
+                        slug: String(p.slug),
+                        url_slug: String(p.url_slug ?? ""),
+                        title: String(p.title ?? ""),
+                        status: String(p.status ?? "")
                     }))
-                    .filter((p) => p.ID && p.URLSlug && p.Title)
+                    .filter((p) => p.slug && p.url_slug && p.title)
 
                 if (mounted) setPages(published)
             } catch {
@@ -51,7 +52,7 @@ export function SiteFooter() {
     }, [])
 
     const pageLinks = useMemo(
-        () => pages.map((p) => ({ key: p.ID, label: p.Title, href: `/${p.URLSlug}` })),
+        () => pages.map((p) => ({ key: p.slug, label: p.title, href: `/${p.url_slug}` })),
         [pages]
     )
 

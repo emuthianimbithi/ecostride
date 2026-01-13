@@ -17,10 +17,14 @@ func NewService(db *gorm.DB) *Service {
 	return &Service{DB: db}
 }
 
-func (s *Service) ListEvents(ctx context.Context, status string) ([]models.Event, error) {
+func (s *Service) ListEvents(ctx context.Context, status, search, t string) ([]models.Event, error) {
 	query := s.DB.WithContext(ctx).Order("start_at asc")
 	if status != "" {
 		query = query.Where("status = ?", status)
+	}
+	if search != "" {
+		likeSearch := "%" + search + "%"
+		query = query.Where("title ILIKE ? OR description ILIKE ?", likeSearch, likeSearch)
 	}
 
 	var events []models.Event
