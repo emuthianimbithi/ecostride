@@ -1,5 +1,11 @@
 import { CMSPage } from "../../components/cms-page"
 
-export default function Page({ params }: { params: { slug: string } }) {
-  return <CMSPage slug={params.slug} fallbackTitle={params.slug.replace(/-/g, " ")} />
+export default async function Page({
+                                       params
+                                   }: {
+    params: Promise<{ slug: string }>
+}) {
+    const { slug } = await params
+
+    return <CMSPage urlSlug={slug} fallbackTitle={""} />
 }

@@ -34,7 +34,7 @@ func NewHandler(service *Service, auditService *audit.Service, cfg config.Config
 }
 
 type pageRequest struct {
-	Slug      string          `json:"slug" binding:"required"`
+	Slug      string          `json:"slug"`
 	Title     string          `json:"title" binding:"required"`
 	Status    string          `json:"status"`
 	Blocks    json.RawMessage `json:"blocks"`
@@ -44,7 +44,7 @@ type pageRequest struct {
 }
 
 type postRequest struct {
-	Slug            string          `json:"slug" binding:"required"`
+	Slug            string          `json:"slug"`
 	Title           string          `json:"title" binding:"required"`
 	Content         json.RawMessage `json:"content"`
 	Excerpt         string          `json:"excerpt"`
@@ -131,8 +131,13 @@ func (h *Handler) CreatePage(c *gin.Context) {
 	}
 
 	page := models.Page{
-		Slug:           uuid.New(),
-		URLSlug:        req.Slug,
+		Slug: uuid.New(),
+		URLSlug: func() string {
+			if strings.TrimSpace(req.Slug) == "" {
+				return strings.ToLower(strings.ReplaceAll(req.Title, " ", "-"))
+			}
+			return req.Slug
+		}(),
 		Title:          req.Title,
 		Status:         status,
 		Blocks:         datatypes.JSON(req.Blocks),
@@ -172,7 +177,12 @@ func (h *Handler) UpdatePage(c *gin.Context) {
 		return
 	}
 
-	page.URLSlug = req.Slug
+	page.URLSlug = func() string {
+		if strings.TrimSpace(req.Slug) == "" {
+			return strings.ToLower(strings.ReplaceAll(req.Title, " ", "-"))
+		}
+		return req.Slug
+	}()
 	page.Title = req.Title
 	page.Status = req.Status
 	page.Blocks = datatypes.JSON(req.Blocks)

@@ -1057,8 +1057,8 @@ func seedDemoPosts(dbConn *gorm.DB, media map[string]models.Media, authorID uint
 			Tags:       []string{"malindi"},
 		},
 		{
-			Slug:       "diani-cleanup-weekend",
-			Title:      "Diani cleanup weekend recap",
+			Slug:       "Malindi-cleanup-weekend",
+			Title:      "Malindi cleanup weekend recap",
 			Excerpt:    "Over 200 volunteers joined forces to restore the shoreline.",
 			Content:    "Volunteer teams collected 640kg of waste and mapped new hotspots.",
 			MediaKey:   "hero-cleanup",
@@ -1161,13 +1161,13 @@ func seedDemoEvents(dbConn *gorm.DB, media map[string]models.Media, createdBy ui
 		}).Error
 	}
 
-	mombasa := seedEventWithSlug(dbConn, models.Event{
+	Malindi := seedEventWithSlug(dbConn, models.Event{
 		Slug:        uuid.New(),
-		URLSlug:     "mombasa-10k",
+		URLSlug:     "Malindi-10k",
 		Type:        "MARATHON",
-		Title:       "Mombasa 10K",
+		Title:       "Malindi 10K",
 		Description: "Fast city route along the coast.",
-		Location:    "Mombasa",
+		Location:    "Malindi",
 		StartAt:     time.Now().AddDate(0, 2, 5),
 		Status:      "published",
 		CreatedBy:   createdBy,
@@ -1175,11 +1175,11 @@ func seedDemoEvents(dbConn *gorm.DB, media map[string]models.Media, createdBy ui
 
 	cleanup := seedEventWithSlug(dbConn, models.Event{
 		Slug:        uuid.New(),
-		URLSlug:     "diani-cleanup",
+		URLSlug:     "Malindi-cleanup",
 		Type:        "BEACH_CLEANUP",
-		Title:       "Diani Beach Cleanup",
+		Title:       "Malindi Beach Cleanup",
 		Description: "Monthly volunteer cleanup and sorting.",
-		Location:    "Diani",
+		Location:    "Malindi",
 		StartAt:     time.Now().AddDate(0, 0, 18),
 		Status:      "published",
 		CreatedBy:   createdBy,
@@ -1207,8 +1207,8 @@ func seedDemoEvents(dbConn *gorm.DB, media map[string]models.Media, createdBy ui
 		{EventID: malindi.ID, Name: "10K", PriceKES: 150000, StartBib: 100, EndBib: 199},
 		{EventID: malindi.ID, Name: "21K", PriceKES: 250000, StartBib: 200, EndBib: 299},
 		{EventID: malindi.ID, Name: "42K", PriceKES: 400000, StartBib: 300, EndBib: 399},
-		{EventID: mombasa.ID, Name: "10K", PriceKES: 180000, StartBib: 400, EndBib: 449},
-		{EventID: mombasa.ID, Name: "5K", PriceKES: 120000, StartBib: 450, EndBib: 499},
+		{EventID: Malindi.ID, Name: "10K", PriceKES: 180000, StartBib: 400, EndBib: 449},
+		{EventID: Malindi.ID, Name: "5K", PriceKES: 120000, StartBib: 450, EndBib: 499},
 	}
 
 	for _, def := range categoryDefs {
@@ -1248,7 +1248,6 @@ func seedDemoEvents(dbConn *gorm.DB, media map[string]models.Media, createdBy ui
 
 	return demoEvents{
 		Malindi: malindi,
-		Mombasa: mombasa,
 		Cleanup: cleanup,
 		Summit:  summit,
 	}
@@ -1319,10 +1318,10 @@ func seedDemoWaivers(dbConn *gorm.DB, events demoEvents) map[string]models.Waive
 			Content: "You accept the Malindi marathon safety and liability terms.",
 		},
 		{
-			EventID: events.Mombasa.ID,
-			Key:     "mombasa",
-			Title:   "Mombasa 10K Waiver",
-			Content: "You accept the Mombasa 10K race terms.",
+			EventID: events.Malindi.ID,
+			Key:     "Malindi",
+			Title:   "Malindi 10K Waiver",
+			Content: "You accept the Malindi 10K race terms.",
 		},
 	}
 
@@ -1362,8 +1361,8 @@ func seedDemoRegistrations(dbConn *gorm.DB, events demoEvents, waivers map[strin
 		{Event: events.Malindi, Category: "10K", Name: "Amina N.", Email: "amina.runner@example.com", Status: "confirmed", Gender: "F", Phone: "254700000010"},
 		{Event: events.Malindi, Category: "21K", Name: "Jonas K.", Email: "jonas.runner@example.com", Status: "pending_payment", Gender: "M", Phone: "254700000011"},
 		{Event: events.Malindi, Category: "42K", Name: "Faith W.", Email: "faith.runner@example.com", Status: "confirmed", Gender: "F", Phone: "254700000012"},
-		{Event: events.Mombasa, Category: "10K", Name: "Peter O.", Email: "peter.runner@example.com", Status: "confirmed", Gender: "M", Phone: "254700000013"},
-		{Event: events.Mombasa, Category: "5K", Name: "Leah M.", Email: "leah.runner@example.com", Status: "cancelled", Gender: "F", Phone: "254700000014"},
+		{Event: events.Malindi, Category: "10K", Name: "Peter O.", Email: "peter.runner@example.com", Status: "confirmed", Gender: "M", Phone: "254700000013"},
+		{Event: events.Malindi, Category: "5K", Name: "Leah M.", Email: "leah.runner@example.com", Status: "cancelled", Gender: "F", Phone: "254700000014"},
 		{Event: events.Cleanup, Category: "", Name: "Sam Volunteer", Email: "sam.cleanup@example.com", Status: "confirmed", Gender: "M", Phone: "254700000015"},
 	}
 
@@ -1399,8 +1398,8 @@ func seedDemoRegistrations(dbConn *gorm.DB, events demoEvents, waivers map[strin
 		waiverKey := "GLOBAL"
 		if seed.Event.URLSlug == "malindi-marathon" {
 			waiverKey = "malindi"
-		} else if seed.Event.URLSlug == "mombasa-10k" {
-			waiverKey = "mombasa"
+		} else if seed.Event.URLSlug == "Malindi-10k" {
+			waiverKey = "Malindi"
 		}
 		if waiver, ok := waivers[waiverKey]; ok {
 			consent := models.ConsentRecord{
@@ -1595,7 +1594,7 @@ func seedDemoVolunteers(dbConn *gorm.DB, events demoEvents) {
 			RoleName:    "Cleanup Lead",
 			ShiftStart:  pointerToTime(time.Now().AddDate(0, 0, -2)),
 			ShiftEnd:    pointerToTime(time.Now().AddDate(0, 0, -2).Add(2 * time.Hour)),
-			Location:    "Diani Beach",
+			Location:    "Malindi Beach",
 			Status:      "completed",
 		},
 	}

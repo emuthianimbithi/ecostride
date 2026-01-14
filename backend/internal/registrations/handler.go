@@ -149,6 +149,15 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 		return
 	}
 
+	existing, err := h.findExistingRegistration(c, event.ID, req.Email)
+	if err != nil {
+		return
+	}
+	if existing != nil {
+		c.JSON(http.StatusOK, existing)
+		return
+	}
+
 	category, err := h.resolveCategory(c, event.ID, req.CategorySlug)
 	if err != nil {
 		return
@@ -730,6 +739,23 @@ func (h *Handler) ensureNoDuplicate(c *gin.Context, eventID uint, email string) 
 	}
 
 	return nil
+}
+
+func (h *Handler) findExistingRegistration(c *gin.Context, eventID uint, email string) (*models.Registration, error) {
+	var existing models.Registration
+	err := h.DB.WithContext(c.Request.Context()).
+		Where("event_id = ? AND email = ? AND status IN ('created','pending_payment','paid','confirmed', 'failed')", eventID, email).
+		First(&existing).Error
+
+	if err == nil {
+		return &existing, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate registration"})
+	return nil, err
 }
 
 func registrationWindowOpen(event models.Event) bool {

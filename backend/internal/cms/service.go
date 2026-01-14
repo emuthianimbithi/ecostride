@@ -38,7 +38,7 @@ func (s *Service) ListPages(ctx context.Context, status string) ([]models.Page, 
 func (s *Service) GetPublishedPageBySlug(ctx context.Context, slug string) (models.Page, error) {
 	var page models.Page
 	if err := s.DB.WithContext(ctx).
-		Where("url_slug = ? AND status = ?", slug, "published").
+		Where("(slug = ? or url_slug = ?) AND status = ?", slug, slug, "published").
 		First(&page).Error; err != nil {
 		return models.Page{}, err
 	}

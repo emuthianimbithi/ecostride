@@ -1,5 +1,5 @@
 import { CMSPage } from "../../components/cms-page"
 
 export default function Page() {
-  return <CMSPage slug="contact" fallbackTitle="Contact" />
+  return <CMSPage urlSlug="contact-ecostride" fallbackTitle="Contact" />
 }

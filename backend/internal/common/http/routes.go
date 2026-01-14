@@ -61,6 +61,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 
 	// Public fundraising
 	public.GET("/shop/products", handlers.Shop.ListPublicProducts)
+	public.GET("/shop/:slug", handlers.Shop.GetOrderBySlug)
 	public.POST("/shop/orders", RateLimit("public.shop.orders", 10, time.Minute), handlers.Shop.CreateOrder)
 	public.POST("/shop/orders/:id/pay/stripe", RateLimit("public.shop.pay.stripe", 5, time.Minute), handlers.Shop.PayOrderStripe)
 	public.POST("/shop/orders/:id/pay/mpesa", RateLimit("public.shop.pay.mpesa", 5, time.Minute), handlers.Shop.PayOrderMpesa)

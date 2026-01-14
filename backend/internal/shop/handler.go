@@ -663,6 +663,24 @@ func (h *Handler) ListOrders(c *gin.Context) {
 	c.JSON(http.StatusOK, rows)
 }
 
+// get order from slug
+func (h *Handler) GetOrderBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	orderSlug, err := uuid.Parse(slug)
+	if err != nil {
+		apierrors.AbortWithError(c, http.StatusBadRequest, "", "invalid order slug", nil)
+		return
+	}
+
+	var order models.Order
+	if err := h.DB.WithContext(c.Request.Context()).Where("slug = ?", orderSlug).First(&order).Error; err != nil {
+		apierrors.AbortWithError(c, http.StatusNotFound, "", "order not found", nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, order)
+}
+
 func priceForCurrency(product models.Product, currency string) (int, bool) {
 	switch currency {
 	case "KES":

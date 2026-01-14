@@ -2,10 +2,10 @@ import Link from "next/link"
 import { serverGet } from "../../lib/api-server"
 
 type Album = {
-  Slug: string
-  Title: string
-  Description: string
-  URLSlug: string
+  slug: string
+  title: string
+  description: string
+  url_slug: string
 }
 
 export default async function Page() {
@@ -27,12 +27,12 @@ export default async function Page() {
         <div className="grid gap-5 md:grid-cols-2">
           {albums.map((album) => (
             <Link
-              key={album.Slug}
-              href={`/gallery/${album.URLSlug}`}
+              key={album.slug}
+              href={`/gallery/${album.url_slug}`}
               className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
             >
-              <h2 className="text-xl font-semibold text-foreground">{album.Title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{album.Description}</p>
+              <h2 className="text-xl font-semibold text-foreground">{album.title}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{album.description}</p>
             </Link>
           ))}
           {albums.length === 0 && (

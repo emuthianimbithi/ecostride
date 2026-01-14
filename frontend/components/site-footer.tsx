@@ -10,12 +10,27 @@ const quickLinks = [
     { label: "Events", href: "/events" },
     { label: "Results", href: "/results" },
     { label: "Support", href: "/support" },
+    { label: "Registrations", href: "/registrations" },
+    { label: "Orders", href: "/orders" },
     { label: "Blog", href: "/blog" },
     { label: "Gallery", href: "/gallery" },
     { label: "Sponsors", href: "/sponsors" }
 ]
 
+
+type CMSPageResponse = {
+    ID?: number
+    CreatedAt?: string
+    UpdatedAt?: string
+    DeletedAt?: string | null
+    slug?: string
+    url_slug?: string
+    title?: string
+    status?: string
+}
+
 type CMSPage = {
+    id: number
     slug: string
     url_slug: string
     title: string
@@ -29,21 +44,26 @@ export function SiteFooter() {
         let mounted = true
         ;(async () => {
             try {
-                const data = await apiGet<any[]>("/public/pages?status=published")
-                console.log("Fetched CMS pages for footer:", data)
+                const data = await apiGet<CMSPageResponse[]>("/public/pages?status=published")
+                console.log("Raw CMS pages from API:", data)
+
                 const published = (Array.isArray(data) ? data : [])
                     .filter((p) => String(p?.status ?? "").toLowerCase() === "published")
                     .map((p) => ({
-                        slug: String(p.slug),
+                        id: p.ID ?? 0,
+                        slug: String(p.slug ?? ""),
                         url_slug: String(p.url_slug ?? ""),
                         title: String(p.title ?? ""),
                         status: String(p.status ?? "")
                     }))
                     .filter((p) => p.slug && p.url_slug && p.title)
 
+                console.log("Processed CMS pages:", published)
+                console.log("Generated links:", published.map(p => `/${p.url_slug}`))
+
                 if (mounted) setPages(published)
-            } catch {
-                // footer should be resilient; ignore failures
+            } catch (err) {
+                console.error("Failed to fetch CMS pages:", err)
             }
         })()
         return () => {
@@ -52,7 +72,7 @@ export function SiteFooter() {
     }, [])
 
     const pageLinks = useMemo(
-        () => pages.map((p) => ({ key: p.slug, label: p.title, href: `/${p.url_slug}` })),
+        () => pages.map((p) => ({ key: p.slug, label: p.title, href: `/page/${p.url_slug}` })),
         [pages]
     )
 

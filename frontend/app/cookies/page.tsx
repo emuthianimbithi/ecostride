@@ -1,5 +1,5 @@
 import { CMSPage } from "../../components/cms-page"
 
 export default function Page() {
-  return <CMSPage slug="cookies" fallbackTitle="Cookies" />
+  return <CMSPage urlSlug="cookie-policy" fallbackTitle="Cookies" />
 }
