@@ -24,7 +24,16 @@ import (
 	"ecostride/backend/internal/sponsors"
 	"ecostride/backend/internal/users"
 	"ecostride/backend/internal/volunteers"
+
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		return
+	} // loads .env file
+}
 
 func main() {
 	cfg := config.Load()
