@@ -402,36 +402,61 @@ export default function Page() {
             setError("Choose file(s) to upload.")
             return
         }
+
         if (!media_form.alt_text.trim()) {
-            setError("Alt text is required for uploaded images.")
+            setError("Alt text is required.")
             return
         }
+
         setError(null)
         setStatus("Uploading media...")
+
         try {
             for (let i = 0; i < media_files.length; i++) {
                 const original = media_files[i]
                 let toSend: File = original
+
                 if (isCompressibleVideo(original)) {
                     setStatus(`Compressing video ${i + 1}/${media_files.length}: ${original.name} 0%`)
+
                     try {
-                        toSend = await compressVideo(original, {
+                        const compressed = await compressVideo(original, {
                             onProgress: (p) => {
-                                setStatus(`Compressing video ${i + 1}/${media_files.length}: ${original.name} ${Math.round(p * 100)}%`)
+                                setStatus(
+                                    `Compressing video ${i + 1}/${media_files.length}: ${original.name} ${Math.round(p * 100)}%`
+                                )
                             }
                         })
+
+                        // Keep a real filename + mime type after compression
+                        toSend = new File(
+                            [compressed],
+                            original.name.replace(/\.[^.]+$/, ".mp4"),
+                            { type: "video/mp4" }
+                        )
                     } catch (compressErr) {
                         console.error("video compression failed, uploading original", compressErr)
                         toSend = original
                     }
                 }
+
                 setStatus(`Uploading ${i + 1}/${media_files.length}: ${toSend.name}`)
+
                 const fd = new FormData()
-                fd.append("file", toSend)
+                fd.append("file", toSend, toSend.name)
+
+                // Important: backend should not have to infer this from a compressed blob
+                fd.append("type", toSend.type.startsWith("video/") ? "video" : toSend.type.startsWith("image/") ? "image" : "file")
+
                 const suffix = media_files.length > 1 ? ` (${i + 1}/${media_files.length})` : ""
                 fd.append("alt_text", `${media_form.alt_text.trim()}${suffix}`)
-                await apiFetch("/admin/media/upload", { method: "POST", body: fd })
+
+                await apiFetch("/admin/media/upload", {
+                    method: "POST",
+                    body: fd
+                })
             }
+
             setStatus("Media uploaded")
             setMediaFiles([])
             setMediaForm((prev) => ({ ...prev, url: "", alt_text: "" }))
@@ -441,7 +466,6 @@ export default function Page() {
             setError(err instanceof Error ? err.message : "Failed to upload media")
         }
     }
-
     // ensure keys are unique even if media has duplicates
     const media_options = useMemo(
         () =>
