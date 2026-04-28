@@ -1187,9 +1187,9 @@ func seedDemoEvents(dbConn *gorm.DB, media map[string]models.Media, createdBy ui
 
 	summit := seedEventWithSlug(dbConn, models.Event{
 		Slug:        uuid.New(),
-		URLSlug:     "eco-summit-2024",
+		URLSlug:     "eco-summit-2026",
 		Type:        "SEMINAR",
-		Title:       "EcoStride Summit 2024",
+		Title:       "EcoStride Summit 2026",
 		Description: "Panels on sustainable sports and community impact.",
 		Location:    "Nairobi",
 		StartAt:     time.Now().AddDate(0, 3, 10),
