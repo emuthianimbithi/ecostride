@@ -1,5 +1,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
+
+export const dynamic = "force-dynamic"
 import { SiteFooter } from "../components/site-footer"
 import { SiteHeader } from "../components/site-header"
 
