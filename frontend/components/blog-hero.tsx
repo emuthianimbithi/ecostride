@@ -1,5 +1,28 @@
 import Image from "next/image"
 
+function isVideoUrl(url: string): boolean {
+  const clean = url.split("?")[0].toLowerCase()
+  return clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".mov") || clean.endsWith(".m4v")
+}
+
+function HeroMedia({ url, alt, pos }: { url: string; alt: string; pos: string }) {
+  if (isVideoUrl(url)) {
+    return (
+      <video
+        src={url}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ objectPosition: pos }}
+      />
+    )
+  }
+  return <Image src={url} alt={alt} fill className="object-cover" style={{ objectPosition: pos }} />
+}
+
 type Overlay = {
   Enabled?: boolean
   Type?: "gradient" | "solid"
@@ -82,7 +105,7 @@ export function BlogHero(props: {
       <section className="mx-auto max-w-5xl">
         <div className="grid gap-6 md:grid-cols-2 md:items-center">
           <div className={`relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm ${aspect}`}>
-            <Image src={imageUrl} alt={title} fill className="object-cover" style={{ objectPosition: pos }} />
+            <HeroMedia url={imageUrl} alt={title} pos={pos} />
           </div>
           <div className="space-y-3">
             {showTitle && <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{title}</h1>}
@@ -103,7 +126,7 @@ export function BlogHero(props: {
           </div>
         )}
         <div className={`relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm ${aspect}`}>
-          <Image src={imageUrl} alt={title} fill className="object-cover" style={{ objectPosition: pos }} />
+          <HeroMedia url={imageUrl} alt={title} pos={pos} />
         </div>
       </section>
     )
@@ -117,7 +140,7 @@ export function BlogHero(props: {
   return (
     <section className="mx-auto max-w-5xl">
       <div className={`relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm ${aspect}`}>
-        <Image src={imageUrl} alt={title} fill className="object-cover" style={{ objectPosition: pos }} />
+        <HeroMedia url={imageUrl} alt={title} pos={pos} />
         {hasOverlay ? (
           overlay?.Type === "solid" ? (
             <div className="absolute inset-0 bg-black" style={{ opacity: overlayOpacity }} />
