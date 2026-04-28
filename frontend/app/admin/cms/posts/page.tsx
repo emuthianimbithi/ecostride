@@ -5,6 +5,7 @@ import { apiFetch, apiGet, apiPost, apiPut } from "../../../../lib/api-client"
 import { useToast } from "../../../../components/toast"
 import { toastApiError } from "../../../../lib/toast-api-error"
 import { BlogHero, type HeroStyle } from "../../../../components/blog-hero"
+import { compressVideo, isCompressibleVideo } from "../../../../lib/compress-video"
 
 // --------------------
 // API response types (snake_case)
@@ -371,9 +372,24 @@ export default function Page() {
         setStatus("Uploading media...")
         try {
             for (let i = 0; i < media_files.length; i++) {
-                const file = media_files[i]
+                const original = media_files[i]
+                let toSend: File = original
+                if (isCompressibleVideo(original)) {
+                    setStatus(`Compressing video ${i + 1}/${media_files.length}: ${original.name} 0%`)
+                    try {
+                        toSend = await compressVideo(original, {
+                            onProgress: (p) => {
+                                setStatus(`Compressing video ${i + 1}/${media_files.length}: ${original.name} ${Math.round(p * 100)}%`)
+                            }
+                        })
+                    } catch (compressErr) {
+                        console.error("video compression failed, uploading original", compressErr)
+                        toSend = original
+                    }
+                }
+                setStatus(`Uploading ${i + 1}/${media_files.length}: ${toSend.name}`)
                 const fd = new FormData()
-                fd.append("file", file)
+                fd.append("file", toSend)
                 const suffix = media_files.length > 1 ? ` (${i + 1}/${media_files.length})` : ""
                 fd.append("alt_text", `${media_form.alt_text.trim()}${suffix}`)
                 await apiFetch("/admin/media/upload", { method: "POST", body: fd })

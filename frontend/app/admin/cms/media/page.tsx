@@ -5,6 +5,7 @@ import { UploadCloud } from "lucide-react"
 import { apiFetch, apiGet } from "../../../../lib/api-client"
 import { useToast } from "../../../../components/toast"
 import { DataState } from "../../../../components/data-state"
+import { compressVideo, isCompressibleVideo } from "../../../../lib/compress-video"
 
 type MediaItem = {
   id: number
@@ -35,6 +36,7 @@ export default function MediaLibraryPage() {
   const [files, setFiles] = useState<File[]>([])
   const [altPrefix, setAltPrefix] = useState("")
   const [saving, setSaving] = useState(false)
+  const [progressLabel, setProgressLabel] = useState<string | null>(null)
   const [assignments, setAssignments] = useState<Record<string, AssetMeta>>({})
 
   const loadMedia = async () => {
@@ -80,9 +82,24 @@ export default function MediaLibraryPage() {
     setSaving(true)
     try {
       for (let i = 0; i < files.length; i++) {
-        const file = files[i]
+        const original = files[i]
+        let toSend: File = original
+        if (isCompressibleVideo(original)) {
+          setProgressLabel(`Compressing ${i + 1}/${files.length}: ${original.name} 0%`)
+          try {
+            toSend = await compressVideo(original, {
+              onProgress: (p) => {
+                setProgressLabel(`Compressing ${i + 1}/${files.length}: ${original.name} ${Math.round(p * 100)}%`)
+              }
+            })
+          } catch (compressErr) {
+            console.error("video compression failed, uploading original", compressErr)
+            toSend = original
+          }
+        }
+        setProgressLabel(`Uploading ${i + 1}/${files.length}: ${toSend.name}`)
         const fd = new FormData()
-        fd.append("file", file)
+        fd.append("file", toSend)
         fd.append("alt_text", `${altPrefix.trim()} (${i + 1}/${files.length})`)
         await apiFetch("/admin/media/upload", { method: "POST", body: fd })
       }
@@ -93,6 +110,7 @@ export default function MediaLibraryPage() {
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" })
     } finally {
+      setProgressLabel(null)
       setSaving(false)
     }
   }
@@ -169,6 +187,7 @@ export default function MediaLibraryPage() {
           </button>
         </div>
         <p className="mt-2 text-xs text-slate-500">{queueSummary}</p>
+        {progressLabel && <p className="mt-1 text-xs font-medium text-forest">{progressLabel}</p>}
         <p className="mt-1 text-xs text-slate-500">
           Upload pipeline generates responsive variants server-side where configured (400/800/1600w) and should produce poster frames for video when backend support is enabled.
         </p>
