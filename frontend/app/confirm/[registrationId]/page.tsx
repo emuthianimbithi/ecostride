@@ -27,6 +27,15 @@ function formatDateSafe(value?: string) {
     return d.toLocaleDateString()
 }
 
+function estimateImpactMeters(categoryName?: string) {
+    const name = String(categoryName ?? "").toUpperCase()
+    if (name.includes("42")) return 35
+    if (name.includes("21")) return 24
+    if (name.includes("10")) return 14
+    if (name.includes("5")) return 9
+    return 12
+}
+
 export default async function Page({ params, searchParams }: PageProps) {
     const { registrationId } = await params
     const sp = (await searchParams) ?? {}
@@ -40,6 +49,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 
         const eventDate = registration.event_start_at ? formatDateSafe(registration.event_start_at) : ""
         const registeredDate = registration.created_at ? formatDateSafe(registration.created_at) : ""
+        const fundedMeters = estimateImpactMeters(registration.category_name)
 
         const ticket = (
             <section
@@ -145,6 +155,16 @@ export default async function Page({ params, searchParams }: PageProps) {
                             {registration.status}
                         </p>
                     </div>
+
+                    <section className="rounded-2xl border border-forest-200 bg-gradient-to-br from-forest-50 via-sand-50 to-tide-50 p-6">
+                        <p className="text-xs uppercase tracking-[0.2em] text-forest-700">Impact Card</p>
+                        <h2 className="mt-2 font-display text-h2 text-text-strong">
+                            You just funded ~{fundedMeters} meters of shoreline action.
+                        </h2>
+                        <p className="mt-2 text-sm text-foreground/85">
+                            Share this card with your crew and invite them to run for estuaries.
+                        </p>
+                    </section>
 
                     {ticket}
 

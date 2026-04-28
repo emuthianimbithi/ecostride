@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { apiGet, apiPost } from "../../../lib/api-client"
+import { useEffect, useRef, useState } from "react"
+import { apiDelete, apiGet, apiPost } from "../../../lib/api-client"
 import { useToast } from "../../../components/toast"
-import { ClipboardList, Medal, Settings2 } from "lucide-react"
+import { ClipboardList, Medal, Settings2, Trash2 } from "lucide-react"
+import { TypedConfirmDialog } from "../../../components/ui/typed-confirm-dialog"
 
 type Event = {
     slug: string
@@ -15,10 +16,27 @@ type Event = {
     start_at: string
 }
 
+type AuditLog = {
+    Slug?: string
+    ActorUserID?: number
+    ActionKey?: string
+    EntityType?: string
+    EntityID?: string
+    CreatedAt?: string
+    slug?: string
+    actor_user_id?: number
+    action_key?: string
+    entity_type?: string
+    entity_id?: string
+    created_at?: string
+}
+
 export default function EventsPage() {
     const { toast } = useToast()
     const [events, setEvents] = useState<Event[]>([])
     const [showForm, setShowForm] = useState(false)
+    const [auditMap, setAuditMap] = useState<Record<string, { action: string; createdAt: string; actorId: number }>>({})
+    const [deleteTarget, setDeleteTarget] = useState<Event | null>(null)
 
     // ✅ field-level validation errors
     const [errors, setErrors] = useState<Record<string, string>>({})
@@ -35,10 +53,34 @@ export default function EventsPage() {
         reg_close_at: "",
         status: "draft"
     })
+    const draftKey = "admin_event_create_draft_v1"
+    const initialFormRef = useRef(JSON.stringify(form))
 
     useEffect(() => {
         void loadEvents()
+        void loadAudit()
+        try {
+            const raw = localStorage.getItem(draftKey)
+            if (raw) {
+                const parsed = JSON.parse(raw)
+                setForm((prev) => ({ ...prev, ...parsed }))
+                setShowForm(true)
+            }
+        } catch {
+            // ignore draft restore failures
+        }
     }, [])
+
+    useEffect(() => {
+        const t = window.setTimeout(() => {
+            try {
+                localStorage.setItem(draftKey, JSON.stringify(form))
+            } catch {
+                // ignore
+            }
+        }, 400)
+        return () => window.clearTimeout(t)
+    }, [form])
 
     const loadEvents = async () => {
         try {
@@ -50,6 +92,27 @@ export default function EventsPage() {
                 description: err instanceof Error ? err.message : "Unknown error",
                 variant: "destructive"
             })
+        }
+    }
+
+    const loadAudit = async () => {
+        try {
+            const logs = await apiGet<AuditLog[]>("/admin/audit-logs?limit=200")
+            const byEvent: Record<string, { action: string; createdAt: string; actorId: number }> = {}
+            ;(Array.isArray(logs) ? logs : []).forEach((raw) => {
+                const action = String(raw.action_key ?? raw.ActionKey ?? "")
+                const entityType = String(raw.entity_type ?? raw.EntityType ?? "")
+                const entityId = String(raw.entity_id ?? raw.EntityID ?? "")
+                const createdAt = String(raw.created_at ?? raw.CreatedAt ?? "")
+                const actorId = Number(raw.actor_user_id ?? raw.ActorUserID ?? 0)
+                if (entityType !== "event" || !entityId) return
+                if (!byEvent[entityId]) {
+                    byEvent[entityId] = { action, createdAt, actorId }
+                }
+            })
+            setAuditMap(byEvent)
+        } catch {
+            // non-blocking
         }
     }
 
@@ -116,9 +179,15 @@ export default function EventsPage() {
                 reg_close_at: "",
                 status: "draft"
             })
+            try {
+                localStorage.removeItem(draftKey)
+            } catch {
+                // ignore
+            }
             setErrors({})
             setShowForm(false)
             await loadEvents()
+            await loadAudit()
         } catch (err) {
             toast({
                 title: "Creation Failed",
@@ -126,6 +195,25 @@ export default function EventsPage() {
                 variant: "destructive"
             })
         }
+    }
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!showForm) return
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                e.preventDefault()
+                void handleCreate()
+            }
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [showForm, form])
+
+    const handleDelete = async (eventSlug: string) => {
+        await apiDelete(`/admin/events/${eventSlug}`)
+        toast({ title: "Success", description: "Event deleted", variant: "success" })
+        await loadEvents()
+        await loadAudit()
     }
 
     return (
@@ -287,6 +375,46 @@ export default function EventsPage() {
                 </section>
             )}
 
+            {showForm && (
+                <section className="sticky bottom-3 z-20 rounded-2xl border border-tide-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm text-slate-600">
+                            {JSON.stringify(form) === initialFormRef.current ? "No unsaved changes" : "Unsaved changes"}
+                            {" • "}
+                            Press <span className="font-semibold">⌘S / Ctrl+S</span> to save.
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    setForm({
+                                        slug: "",
+                                        type: "MARATHON",
+                                        title: "",
+                                        description: "",
+                                        location: "",
+                                        map_url: "",
+                                        start_at: "",
+                                        reg_open_at: "",
+                                        reg_close_at: "",
+                                        status: "draft"
+                                    })
+                                    setErrors({})
+                                }}
+                                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                            >
+                                Reset
+                            </button>
+                            <button
+                                onClick={handleCreate}
+                                className="rounded-full bg-forest px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                                Save now
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            )}
+
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -303,7 +431,14 @@ export default function EventsPage() {
                         <tr key={event.slug} className="border-t border-slate-100">
                             <td className="px-4 py-3 font-medium text-slate-800">{event.title}</td>
                             <td className="px-4 py-3 text-slate-600">{event.type}</td>
-                            <td className="px-4 py-3 text-slate-600">{event.status}</td>
+                            <td className="px-4 py-3 text-slate-600">
+                                <div>{event.status}</div>
+                                {auditMap[event.slug] ? (
+                                    <div className="text-[11px] text-slate-400" title={`${auditMap[event.slug].action} • actor ${auditMap[event.slug].actorId}`}>
+                                        Last audit: {auditMap[event.slug].action}
+                                    </div>
+                                ) : null}
+                            </td>
                             <td className="px-4 py-3 text-slate-600">
                                 {event.start_at ? new Date(event.start_at).toLocaleDateString() : "-"}
                             </td>
@@ -342,6 +477,14 @@ export default function EventsPage() {
                                     <Link href={`/admin/bibs?event=${event.slug}`} className="font-semibold text-sky-600">
                                         Race Day
                                     </Link>
+                                    <button
+                                        onClick={() => setDeleteTarget(event)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full font-semibold text-rose-600 hover:bg-slate-50"
+                                        aria-label="Delete event"
+                                        title="Delete event"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -357,6 +500,21 @@ export default function EventsPage() {
                     </tbody>
                 </table>
             </div>
+
+            {deleteTarget && (
+                <TypedConfirmDialog
+                    open={Boolean(deleteTarget)}
+                    title="Delete event"
+                    description={`This will permanently remove "${deleteTarget.title}". Type the event URL slug to proceed.`}
+                    requiredText={deleteTarget.url_slug}
+                    confirmLabel="Delete event"
+                    onClose={() => setDeleteTarget(null)}
+                    onConfirm={async () => {
+                        await handleDelete(deleteTarget.slug)
+                        setDeleteTarget(null)
+                    }}
+                />
+            )}
         </main>
     )
 }

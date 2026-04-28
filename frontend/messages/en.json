@@ -1,0 +1,31 @@
+{
+  "site": {
+    "name": "EcoStride",
+    "tagline": "Run where the river meets the sea."
+  },
+  "nav": {
+    "events": "Events",
+    "blog": "Blog",
+    "gallery": "Gallery",
+    "volunteer": "Volunteer",
+    "support": "Support",
+    "language": "Language"
+  },
+  "home": {
+    "heroTitle": "Run where the river meets the sea.",
+    "heroSubtitle": "Every bib funds mangrove planting, plastic recovery, and citizen science.",
+    "findRace": "Find a race",
+    "whyEstuaries": "Why estuaries?"
+  },
+  "registration": {
+    "stepCategory": "Category",
+    "stepAthlete": "Athlete",
+    "stepExtras": "Extras",
+    "stepWaiver": "Waiver",
+    "stepPayment": "Payment"
+  },
+  "footer": {
+    "newsletter": "Get updates on races and impact",
+    "legal": "Legal"
+  }
+}

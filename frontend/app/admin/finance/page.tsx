@@ -5,6 +5,7 @@ import { apiFetchResponse, apiGet } from "../../../lib/api-client"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
 import { Download, RefreshCcw } from "lucide-react"
+import { DataState } from "../../../components/data-state"
 
 type FinanceSummary = {
     currency: string
@@ -101,14 +102,15 @@ export default function Page() {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6">
                 <h2 className="text-lg font-semibold text-slate-800">Summary</h2>
-
-                {loading ? (
-                    <p className="mt-4 text-sm text-slate-500">Loading...</p>
-                ) : error ? (
-                    <p className="mt-4 text-sm text-rose-600">{error}</p>
-                ) : summary.length === 0 ? (
-                    <p className="mt-4 text-sm text-slate-500">No payment data yet.</p>
-                ) : (
+                <div className="mt-4">
+                <DataState
+                    loading={loading}
+                    error={error}
+                    isEmpty={summary.length === 0}
+                    emptyView={<p className="text-sm text-slate-500">No payment data yet.</p>}
+                    loadingView={<p className="text-sm text-slate-500">Loading...</p>}
+                    errorView={<p className="text-sm text-rose-600">{error}</p>}
+                >
                     <table className="mt-4 w-full text-sm">
                         <thead className="text-left text-xs uppercase text-slate-500">
                         <tr>
@@ -129,7 +131,8 @@ export default function Page() {
                         ))}
                         </tbody>
                     </table>
-                )}
+                </DataState>
+                </div>
             </div>
         </main>
     )

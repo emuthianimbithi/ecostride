@@ -5,30 +5,124 @@
 @tailwind utilities;
 
 :root {
-  --background: 34 38% 97%;
-  --foreground: 170 22% 16%;
+  /* Core brand ramp: Tide = primary action + links */
+  --tide-50: 164 36% 96%;
+  --tide-100: 165 34% 90%;
+  --tide-200: 166 33% 82%;
+  --tide-300: 168 34% 70%;
+  --tide-400: 170 35% 56%;
+  --tide-500: 171 46% 41%;
+  --tide-600: 171 54% 33%;
+  --tide-700: 171 57% 26%;
+  --tide-800: 172 57% 20%;
+  --tide-900: 173 56% 14%;
+
+  /* Supporting ramp: Forest = restoration + positive impact */
+  --forest-50: 142 36% 95%;
+  --forest-100: 144 31% 89%;
+  --forest-200: 146 29% 78%;
+  --forest-300: 148 28% 63%;
+  --forest-400: 150 33% 46%;
+  --forest-500: 151 45% 33%;
+  --forest-600: 152 52% 27%;
+  --forest-700: 153 54% 22%;
+  --forest-800: 154 55% 17%;
+  --forest-900: 156 56% 12%;
+
+  /* Accent ramp: Sun = highlights, warnings, countdown urgency */
+  --sun-50: 41 100% 97%;
+  --sun-100: 42 98% 91%;
+  --sun-200: 40 96% 82%;
+  --sun-300: 38 95% 72%;
+  --sun-400: 36 91% 63%;
+  --sun-500: 34 86% 56%;
+  --sun-600: 30 79% 49%;
+  --sun-700: 26 74% 42%;
+  --sun-800: 23 69% 35%;
+  --sun-900: 21 67% 28%;
+
+  /* Neutral ramp: Sand = warm UI surfaces and borders */
+  --sand-50: 32 41% 97%;
+  --sand-100: 32 35% 93%;
+  --sand-200: 31 31% 87%;
+  --sand-300: 31 27% 78%;
+  --sand-400: 30 24% 68%;
+  --sand-500: 30 22% 58%;
+  --sand-600: 30 23% 47%;
+  --sand-700: 29 25% 37%;
+  --sand-800: 28 27% 29%;
+  --sand-900: 27 29% 22%;
+
+  --background: 33 38% 97%;
+  --foreground: 171 22% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 170 22% 16%;
-  --muted: 30 24% 93%;
-  --muted-foreground: 180 7% 42%;
-  --border: 30 15% 84%;
-  --input: 30 15% 84%;
-  --primary: 170 38% 28%;
+  --card-foreground: 171 22% 16%;
+  --muted: 32 24% 94%;
+  --muted-foreground: 176 8% 36%;
+  --border: 31 18% 80%;
+  --input: 31 18% 80%;
+  --primary: var(--tide-700);
   --primary-foreground: 0 0% 100%;
-  --secondary: 40 20% 94%;
-  --secondary-foreground: 170 22% 16%;
+  --secondary: var(--sand-100);
+  --secondary-foreground: 171 22% 16%;
   --destructive: 0 70% 45%;
   --destructive-foreground: 0 0% 100%;
-  --ring: 170 38% 28%;
+  --ring: var(--sun-600);
+  --surface: 0 0% 100%;
+  --text-strong: 172 56% 12%;
+  --danger: 0 72% 44%;
+  --success: 149 56% 30%;
+  --warning: 34 86% 46%;
 }
 
 body {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   color: hsl(var(--foreground));
-  background: radial-gradient(1200px 600px at 10% -10%, hsl(var(--secondary)) 0%, hsl(var(--background)) 50%, hsl(var(--muted)) 100%);
+  background: radial-gradient(
+    1200px 600px at 10% -10%,
+    hsl(var(--tide-100)) 0%,
+    hsl(var(--background)) 50%,
+    hsl(var(--sand-100)) 100%
+  );
   min-height: 100vh;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3,
+h4 {
   font-family: "Playfair Display", "Times New Roman", serif;
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-safe-reveal {
+    animation: fade-in-up 0.6s ease-out both;
+  }
 }

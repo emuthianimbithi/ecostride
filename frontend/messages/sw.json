@@ -1,0 +1,31 @@
+{
+  "site": {
+    "name": "EcoStride",
+    "tagline": "Kimbia pale mto unapokutana na bahari."
+  },
+  "nav": {
+    "events": "Matukio",
+    "blog": "Blogu",
+    "gallery": "Picha",
+    "volunteer": "Jitolee",
+    "support": "Saidia",
+    "language": "Lugha"
+  },
+  "home": {
+    "heroTitle": "Kimbia pale mto unapokutana na bahari.",
+    "heroSubtitle": "Kila namba ya mshiriki inachangia upandaji mikoko, urejeshaji wa plastiki na sayansi ya wananchi.",
+    "findRace": "Tafuta mbio",
+    "whyEstuaries": "Kwa nini mito-bahari?"
+  },
+  "registration": {
+    "stepCategory": "Kundi",
+    "stepAthlete": "Mshiriki",
+    "stepExtras": "Nyongeza",
+    "stepWaiver": "Ridhaa",
+    "stepPayment": "Malipo"
+  },
+  "footer": {
+    "newsletter": "Pata taarifa za mbio na athari",
+    "legal": "Kisheria"
+  }
+}

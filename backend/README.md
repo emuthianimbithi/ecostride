@@ -74,6 +74,19 @@ Tip: if your environment blocks the system Go cache, run with workspace-local ca
   - Stripe: configure `STRIPE_WEBHOOK_SECRET` and use Stripe CLI to forward to `POST /api/v1/webhooks/stripe`.
   - M-Pesa: set `MPESA_*` env vars and ensure callback route is reachable.
 
+## Email (SMTP)
+Backend supports SMTP delivery with plaintext + HTML multipart messages.
+
+Set:
+- `EMAIL_PROVIDER=smtp`
+- `SMTP_HOST`
+- `SMTP_PORT` (default `587`)
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM` (optional, falls back to `SMTP_USER`)
+
+If `EMAIL_PROVIDER` is not `smtp`, emails are logged to console for local development.
+
 ## More docs
 See `backend/docs/`:
 - `backend/docs/ARCHITECTURE.md`
@@ -83,4 +96,3 @@ See `backend/docs/`:
 - `backend/docs/RECONCILIATION.md`
 - `backend/docs/RBAC.md`
 - `backend/docs/DB_SCHEMA.md`
-

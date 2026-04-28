@@ -14,8 +14,7 @@ describe("Volunteer signup", () => {
       }
       return Promise.resolve(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }))
     })
-    // @ts-expect-error test override
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
 
     const user = userEvent.setup()
     render(<VolunteersPage />)
@@ -38,8 +37,7 @@ describe("Volunteer signup", () => {
       }
       return Promise.resolve(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }))
     })
-    // @ts-expect-error test override
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
 
     const user = userEvent.setup()
     render(<VolunteersPage />)

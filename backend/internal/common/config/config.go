@@ -26,8 +26,10 @@ type Config struct {
 	MPesaAllowedIPs     string
 	EmailProvider       string
 	SMTPHost            string
+	SMTPPort            string
 	SMTPUser            string
 	SMTPPass            string
+	SMTPFrom            string
 	MediaStorage        string
 	MediaDir            string
 	BaseURL             string
@@ -57,8 +59,10 @@ func Load() Config {
 		MPesaAllowedIPs:     getenv("MPESA_ALLOWED_IPS", ""),
 		EmailProvider:       getenv("EMAIL_PROVIDER", "console"),
 		SMTPHost:            getenv("SMTP_HOST", ""),
+		SMTPPort:            getenv("SMTP_PORT", "587"),
 		SMTPUser:            getenv("SMTP_USER", ""),
 		SMTPPass:            getenv("SMTP_PASS", ""),
+		SMTPFrom:            getenv("SMTP_FROM", ""),
 		MediaStorage:        getenv("MEDIA_STORAGE", "local"),
 		MediaDir:            getenv("MEDIA_DIR", "./uploads"),
 		BaseURL:             getenv("BASE_URL", "http://localhost:8080"),

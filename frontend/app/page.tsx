@@ -1,367 +1,344 @@
 import Image from "next/image"
 import Link from "next/link"
+import { Badge } from "../components/ui/badge"
+import { Card, CardContent } from "../components/ui/card"
+import { formatDate } from "../lib/format"
 import { serverGet } from "../lib/api-server"
-import { formatDate, registrationWindowLabel, registrationWindowStatus } from "../lib/format"
-import { normalizeSponsor } from "../lib/normalize-sponsor"
-
-// ---- API Response Types (snake_case matching backend contract) ----
 
 type EventApi = {
-    slug: string
-    url_slug: string
-    title: string
-    type: string
-    location: string
-    start_at: string
-    status: string
-    reg_open_at?: string | null
-    reg_close_at?: string | null
-    results_published?: boolean
+  slug: string
+  url_slug: string
+  title: string
+  type: string
+  location: string
+  start_at: string
+  reg_open_at?: string | null
+  reg_close_at?: string | null
 }
 
 type PostApi = {
-    slug: string
-    url_slug: string
-    title: string
-    excerpt: string
-    published_at: string
+  slug: string
+  url_slug: string
+  title: string
+  excerpt: string
+  updated_at?: string | null
+  published_at?: string | null
+  featured_image_url?: string | null
 }
 
 type AlbumApi = {
-    slug: string
-    url_slug: string
+  slug: string
+  url_slug: string
+  title: string
+  description: string
+}
+
+type AlbumDetailResponse = {
+  album: {
     title: string
     description: string
+    url_slug: string
+  }
+  media: Array<{
+    url: string
+    alt_text?: string
+  }>
 }
 
-// ---- UI Model Types (PascalCase for internal usage) ----
-
-type Event = {
-    Slug: string
-    URLSlug: string
-    Title: string
-    Type: string
-    Location: string
-    StartAt: string
-    Status: string
-    RegOpenAt?: string | null
-    RegCloseAt?: string | null
-    ResultsPublished?: boolean
+type SponsorApi = {
+  slug: string
 }
 
-type Post = {
-    Slug: string
-    URLSlug: string
-    Title: string
-    Excerpt: string
-    PublishedAt: string
+function registrationCountdown(closeAt?: string | null) {
+  if (!closeAt) {
+    return "Registration window available"
+  }
+  const closeDate = new Date(closeAt)
+  const now = new Date()
+  const diffMs = closeDate.getTime() - now.getTime()
+
+  if (Number.isNaN(closeDate.getTime())) {
+    return "Registration window available"
+  }
+  if (diffMs <= 0) {
+    return "Registration closed"
+  }
+
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+
+  if (days > 0) {
+    return `Registration closes in ${days}d ${hours}h`
+  }
+  return `Registration closes in ${Math.max(hours, 1)}h`
 }
 
-type Album = {
-    Slug: string
-    Title: string
-    URLSlug: string
-    Description: string
+function eventCauseTag(eventType: string) {
+  const kind = eventType.toUpperCase()
+  if (kind.includes("CLEANUP")) {
+    return "Plastic-free coast"
+  }
+  if (kind.includes("MARATHON")) {
+    return "Mangrove restoration"
+  }
+  if (kind.includes("SEMINAR")) {
+    return "Citizen science"
+  }
+  return "Estuary action"
 }
 
-// ---- Mapper Functions (API snake_case → UI PascalCase) ----
-
-function mapEvent(api: EventApi): Event {
-    return {
-        Slug: api.slug,
-        URLSlug: api.url_slug,
-        Title: api.title,
-        Type: api.type,
-        Location: api.location,
-        StartAt: api.start_at,
-        Status: api.status,
-        RegOpenAt: api.reg_open_at,
-        RegCloseAt: api.reg_close_at,
-        ResultsPublished: api.results_published
-    }
+function WaveDivider() {
+  return (
+    <div aria-hidden className="pointer-events-none relative -mt-2 h-10 overflow-hidden text-tide-200">
+      <svg viewBox="0 0 1440 80" className="h-full w-full fill-current" preserveAspectRatio="none">
+        <path d="M0,32L60,42.7C120,53,240,75,360,69.3C480,64,600,32,720,26.7C840,21,960,43,1080,53.3C1200,64,1320,64,1380,64L1440,64L1440,80L1380,80C1320,80,1200,80,1080,80C960,80,840,80,720,80C600,80,480,80,360,80C240,80,120,80,60,80L0,80Z" />
+      </svg>
+    </div>
+  )
 }
 
-function mapPost(api: PostApi): Post {
-    return {
-        Slug: api.slug,
-        URLSlug: api.url_slug,
-        Title: api.title,
-        Excerpt: api.excerpt,
-        PublishedAt: api.published_at
-    }
-}
-
-function mapAlbum(api: AlbumApi): Album {
-    return {
-        Slug: api.slug,
-        Title: api.title,
-        URLSlug: api.url_slug,
-        Description: api.description
-    }
+function PillarIcon({ kind }: { kind: "wave" | "mangrove" | "science" }) {
+  if (kind === "wave") {
+    return (
+      <svg viewBox="0 0 48 48" className="h-7 w-7 text-tide-700" aria-hidden>
+        <path d="M4 28c4 0 4-8 8-8s4 8 8 8 4-8 8-8 4 8 8 8 4-8 8-8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kind === "mangrove") {
+    return (
+      <svg viewBox="0 0 48 48" className="h-7 w-7 text-forest-700" aria-hidden>
+        <path d="M24 40V21M14 27c0-6 4-10 10-10s10 4 10 10M20 40l-6-8M28 40l6-8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 48 48" className="h-7 w-7 text-sun-700" aria-hidden>
+      <circle cx="24" cy="24" r="7" fill="none" stroke="currentColor" strokeWidth="3" />
+      <path d="M24 8v5M24 35v5M8 24h5M35 24h5M13.5 13.5l3.5 3.5M31 31l3.5 3.5M34.5 13.5L31 17M17 31l-3.5 3.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 export default async function HomePage() {
-    const [eventsResponse, postsResponse, sponsors, albumsResponse] = await Promise.all([
-        serverGet<EventApi[]>("/public/events").catch((err) => {
-            console.error("Failed to load events:", err)
-            return []
-        }),
-        serverGet<PostApi[]>("/public/posts").catch((err) => {
-            console.error("Failed to load posts:", err)
-            return []
-        }),
-        serverGet<any[]>("/public/sponsors?placement=HOME_STRIP").catch((err) => {
-            console.error("Failed to load sponsors:", err)
-            return []
-        }),
-        serverGet<AlbumApi[]>("/public/gallery/albums").catch((err) => {
-            console.error("Failed to load albums:", err)
-            return []
-        })
-    ])
+  const [events, posts, albums, sponsors] = await Promise.all([
+    serverGet<EventApi[]>("/public/events", { next: { revalidate: 60 } }).catch(() => []),
+    serverGet<PostApi[]>("/public/posts", { next: { revalidate: 60 } }).catch(() => []),
+    serverGet<AlbumApi[]>("/public/gallery/albums", { next: { revalidate: 60 } }).catch(() => []),
+    serverGet<SponsorApi[]>("/public/sponsors?placement=HOME_STRIP", { next: { revalidate: 60 } }).catch(() => [])
+  ])
 
-    // Map API responses to internal types
-    const events = eventsResponse.map(mapEvent)
-    const posts = postsResponse.map(mapPost)
-    const albums = albumsResponse.map(mapAlbum)
-    const normalizedSponsors = sponsors.map(normalizeSponsor)
+  const upcomingEvents = [...events]
+    .filter((event) => event.start_at)
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
 
-    const upcoming = [...events]
-        .filter((event) => event.StartAt)
-        .sort((a, b) => new Date(a.StartAt).getTime() - new Date(b.StartAt).getTime())
+  const featuredEvent = upcomingEvents[0]
+  const featuredPosts = posts.slice(0, 3)
+  const featuredAlbums = albums.slice(0, 3)
 
-    const nextEvent = upcoming[0]
-    const featuredEvents = upcoming.slice(0, 3)
-    const latestPosts = posts.slice(0, 3)
-    const featuredAlbums = albums.slice(0, 3)
+  const albumPreviews = await Promise.all(
+    featuredAlbums.map(async (album) => {
+      const detail = await serverGet<AlbumDetailResponse>(`/public/gallery/albums/${album.url_slug}`, {
+        next: { revalidate: 60 }
+      }).catch(() => null)
+      return {
+        title: album.title,
+        urlSlug: album.url_slug,
+        imageUrl: detail?.media?.[0]?.url ?? null,
+        imageAlt: detail?.media?.[0]?.alt_text ?? album.title
+      }
+    })
+  )
 
-    return (
-        <main className="px-4 pb-16 sm:px-6 md:px-8">
-            <section className="mx-auto mt-6 grid max-w-6xl gap-10 rounded-[32px] bg-card/80 p-8 shadow-[0_35px_70px_-50px_rgba(15,60,50,0.35)] backdrop-blur md:p-12">
-                <div className="flex flex-col gap-4">
-                    <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                        EcoStride Association • Malindi
-                    </span>
-                    <h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
-                        Run, learn, and protect the coast - one community event at a time.
-                    </h1>
-                    <p className="max-w-2xl text-base text-muted-foreground">
-                        EcoStride brings together marathons, seminars, and beach cleanups with modern registration,
-                        seamless payments, and transparent results.
-                    </p>
-                    <div className="flex flex-wrap gap-4 pt-2">
-                        <Link className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground" href="/events">
-                            Explore events
-                        </Link>
-                        <Link
-                            className="rounded-full border border-border bg-background px-6 py-3 text-sm font-semibold text-foreground"
-                            href="/support"
-                        >
-                            Support a cause
-                        </Link>
-                    </div>
-                </div>
+  const impactStats = [
+    { label: "Community races", value: String(upcomingEvents.length) },
+    { label: "Story updates", value: String(posts.length) },
+    { label: "Active partners", value: String(sponsors.length) }
+  ]
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                        <h3 className="text-lg font-semibold text-foreground">Next event</h3>
-                        <p className="text-sm text-muted-foreground">{nextEvent?.Title || "Stay tuned for updates"}</p>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                            {nextEvent ? `${formatDate(nextEvent.StartAt)} • ${nextEvent.Location}` : "New events arriving soon"}
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                        <h3 className="text-lg font-semibold text-foreground">Live results</h3>
-                        <p className="text-sm text-muted-foreground">
-                            {events.find((event) => event.ResultsPublished)?.Title || "Results publish after race day"}
-                        </p>
-                        <p className="mt-2 text-xs text-muted-foreground">Search bibs and rankings online</p>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                        <h3 className="text-lg font-semibold text-foreground">Volunteer with us</h3>
-                        <p className="text-sm text-muted-foreground">Beach cleanups, water points, and logistics support</p>
-                        <p className="mt-2 text-xs text-muted-foreground">Sign up to be part of the crew</p>
-                    </div>
-                </div>
-            </section>
+  return (
+    <main className="pb-16">
+      <section className="relative isolate overflow-hidden">
+        <div className="absolute inset-0 -z-20">
+          <video autoPlay muted loop playsInline poster="/hero-placeholder.svg" className="h-full w-full object-cover">
+            <source src="/hero-loop.mp4" type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-br from-forest-900/80 via-tide-900/75 to-sun-900/45" />
+        </div>
+        <div className="mx-auto flex min-h-[68vh] max-w-6xl flex-col justify-center px-4 py-24 sm:px-6 md:px-8">
+          <p className="text-caption uppercase tracking-[0.24em] text-sand-100">Run where the river meets the sea</p>
+          <h1 className="mt-4 max-w-3xl font-display text-display-lg text-white md:text-display-xl">
+            Lace up. Show up. Push back the tide one stride at a time.
+          </h1>
+          <p className="mt-5 max-w-2xl text-body text-sand-100/90">
+            EcoStride is a marathon series for people who refuse to watch estuaries die quietly. Every bib funds mangrove planting, plastic recovery, and citizen-science along the coastlines we love.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/events"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-sun-500 px-6 text-sm font-semibold text-sun-900 transition hover:bg-sun-400"
+            >
+              Find a race
+            </Link>
+            <Link
+              href="/support"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-sand-100/60 bg-white/10 px-6 text-sm font-semibold text-white transition hover:bg-white/20"
+            >
+              Why estuaries?
+            </Link>
+          </div>
+        </div>
+      </section>
 
-            <section className="mx-auto mt-12 max-w-6xl space-y-6">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Upcoming events</h2>
-                        <p className="text-sm text-muted-foreground">Register for marathons, seminars, and cleanups.</p>
-                    </div>
-                    <Link className="text-sm font-semibold text-foreground" href="/events">
-                        View all events
-                    </Link>
-                </div>
+      <section className="mx-auto -mt-10 grid max-w-6xl gap-4 px-4 sm:grid-cols-3 sm:px-6 md:px-8">
+        {impactStats.map((stat) => (
+          <Card key={stat.label} className="motion-safe-reveal border-sand-200 bg-surface/95 backdrop-blur">
+            <CardContent className="p-5">
+              <p className="text-caption uppercase tracking-[0.2em] text-muted-foreground">{stat.label}</p>
+              <p className="mt-2 font-display text-h1 text-text-strong">{stat.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    {featuredEvents.map((event, idx) => {
-                        const regStatus = registrationWindowStatus(event.RegOpenAt, event.RegCloseAt)
-                        return (
-                            <Link
-                                key={`${event.Slug}-${idx}`}
-                                href={`/events/${event.URLSlug}`}
-                                className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">{event.Type}</span>
-                                    <span
-                                        className={`text-xs font-semibold ${regStatus === "open" ? "text-emerald-600" : regStatus === "closed" ? "text-rose-600" : "text-amber-600"
-                                            }`}
-                                    >
-                                        {registrationWindowLabel(event.RegOpenAt, event.RegCloseAt)}
-                                    </span>
-                                </div>
-                                <h3 className="mt-4 text-lg font-semibold text-foreground group-hover:text-primary">{event.Title}</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">{event.Location}</p>
-                                <p className="mt-3 text-xs uppercase text-muted-foreground">{formatDate(event.StartAt)}</p>
-                            </Link>
-                        )
-                    })}
-                    {featuredEvents.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-border bg-card/60 p-6 text-sm text-muted-foreground">
-                            No events scheduled yet. Check back soon or volunteer in the meantime.
-                        </div>
-                    )}
-                </div>
-            </section>
+      <WaveDivider />
 
-            <section className="mx-auto mt-12 max-w-6xl rounded-3xl bg-primary text-primary-foreground">
-                <div className="grid gap-8 p-8 md:grid-cols-[1.2fr_1fr] md:p-10">
-                    <div>
-                        <h2 className="text-2xl font-semibold">Support coastal impact</h2>
-                        <p className="mt-2 text-sm text-primary-foreground/80">
-                            Every donation funds race scholarships, community cleanups, and youth sports clinics.
-                        </p>
-                        <div className="mt-5 flex flex-wrap gap-3">
-                            <Link
-                                className="rounded-full bg-primary-foreground px-5 py-2 text-sm font-semibold text-primary"
-                                href="/support"
-                            >
-                                Donate or shop
-                            </Link>
-                            <Link
-                                className="rounded-full border border-primary-foreground/40 px-5 py-2 text-sm font-semibold"
-                                href="/volunteers"
-                            >
-                                Volunteer
-                            </Link>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl bg-primary-foreground/10 p-5">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-primary-foreground/70">
-                            Why it matters
-                        </h3>
-                        <ul className="mt-4 space-y-2 text-sm text-primary-foreground/80">
-                            <li>• Cleanups protect marine life and tourism.</li>
-                            <li>• Events create safe spaces for youth athletes.</li>
-                            <li>• Partnerships grow local business visibility.</li>
-                        </ul>
-                    </div>
-                </div>
-            </section>
+      <section className="mx-auto mt-8 max-w-6xl px-4 sm:px-6 md:px-8">
+        <div className="mb-6">
+          <h2 className="font-display text-h1 text-foreground">Three pillars. One coastline.</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="border-tide-200">
+            <CardContent className="space-y-3 p-6">
+              <PillarIcon kind="wave" />
+              <h3 className="text-h3 font-semibold text-foreground">Plastic-free coast</h3>
+              <p className="text-body text-muted-foreground">Cleanup teams and race-day waste controls that keep estuary channels clear.</p>
+            </CardContent>
+          </Card>
+          <Card className="border-forest-200">
+            <CardContent className="space-y-3 p-6">
+              <PillarIcon kind="mangrove" />
+              <h3 className="text-h3 font-semibold text-foreground">Mangrove restoration</h3>
+              <p className="text-body text-muted-foreground">Every bib contributes to local planting and shoreline protection activity.</p>
+            </CardContent>
+          </Card>
+          <Card className="border-sun-200">
+            <CardContent className="space-y-3 p-6">
+              <PillarIcon kind="science" />
+              <h3 className="text-h3 font-semibold text-foreground">Citizen science</h3>
+              <p className="text-body text-muted-foreground">Runners, schools, and residents gather field observations for estuary health.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
-            <section className="mx-auto mt-12 max-w-6xl space-y-6">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Sponsors & partners</h2>
-                        <p className="text-sm text-muted-foreground">The organizations that fuel EcoStride experiences.</p>
-                    </div>
-                    <Link className="text-sm font-semibold text-foreground" href="/sponsors">
-                        Meet all sponsors
-                    </Link>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                    {normalizedSponsors.map((sponsor, idx) => (
-                        <Link
-                            key={`${sponsor.slug}-${idx}`}
-                            href={`/sponsors/${sponsor.url_slug}`}
-                            className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-                        >
-                            {sponsor.logo.url ? (
-                                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                                    <Image
-                                        src={sponsor.logo.url}
-                                        alt={sponsor.logo.alt || sponsor.name}
-                                        width={64}
-                                        height={64}
-                                        className="h-8 w-8 object-contain"
-                                    />
-                                </span>
-                            ) : (
-                                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-xs font-semibold text-foreground">
-                                    {sponsor.name.slice(0, 2).toUpperCase()}
-                                </span>
-                            )}
-                            <span className="font-medium text-foreground">{sponsor.name}</span>
-                        </Link>
-                    ))}
-                    {normalizedSponsors.length === 0 && (
-                        <div className="text-sm text-muted-foreground">Sponsor highlights will appear here soon.</div>
-                    )}
-                </div>
-            </section>
+      <section className="mx-auto mt-12 max-w-6xl px-4 sm:px-6 md:px-8">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <h2 className="font-display text-h1 text-foreground">Featured race</h2>
+          <Link href="/events" className="text-sm font-semibold text-primary hover:text-primary/80">
+            View all events
+          </Link>
+        </div>
+        <Card className="overflow-hidden border-tide-200">
+          <CardContent className="grid gap-6 p-6 md:grid-cols-[1.5fr_1fr]">
+            <div className="space-y-4">
+              <Badge variant="outline" className="border-tide-300 bg-tide-50 text-tide-700">
+                {featuredEvent ? featuredEvent.type.replaceAll("_", " ") : "Upcoming event"}
+              </Badge>
+              <h3 className="font-display text-h2 text-foreground">
+                {featuredEvent ? featuredEvent.title : "Next estuary run coming soon"}
+              </h3>
+              <p className="text-body text-muted-foreground">
+                {featuredEvent
+                  ? `${formatDate(featuredEvent.start_at)} • ${featuredEvent.location}`
+                  : "New race slots will open shortly. Keep your team ready."}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge>{featuredEvent ? eventCauseTag(featuredEvent.type) : "Estuary action"}</Badge>
+                <Badge variant="warning">{featuredEvent ? registrationCountdown(featuredEvent.reg_close_at) : "Registration opens soon"}</Badge>
+              </div>
+            </div>
+            <div className="rounded-xl bg-gradient-to-br from-tide-100 via-sand-50 to-forest-100 p-5">
+              <p className="text-caption uppercase tracking-[0.2em] text-muted-foreground">Ready to run?</p>
+              <p className="mt-2 text-body text-foreground">
+                Register for the next shoreline event and directly fund conservation work.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Link
+                  href={featuredEvent ? `/register/${featuredEvent.url_slug}` : "/events"}
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+                >
+                  Register now
+                </Link>
+                <Link
+                  href={featuredEvent ? `/events/${featuredEvent.url_slug}` : "/events"}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted"
+                >
+                  View details
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
 
-            <section className="mx-auto mt-12 max-w-6xl space-y-6">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Latest stories</h2>
-                        <p className="text-sm text-muted-foreground">Training tips, recaps, and community highlights.</p>
-                    </div>
-                    <Link className="text-sm font-semibold text-foreground" href="/blog">
-                        Read the blog
-                    </Link>
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
-                    {latestPosts.map((post, idx) => (
-                        <Link
-                            key={`${post.Slug}-${idx}`}
-                            href={`/blog/${post.URLSlug}`}
-                            className="rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
-                        >
-                            <h3 className="text-lg font-semibold text-foreground">{post.Title}</h3>
-                            <p className="mt-2 text-sm text-muted-foreground">{post.Excerpt || "Read more..."}</p>
-                            <span className="mt-3 inline-flex text-xs uppercase text-muted-foreground">{formatDate(post.PublishedAt)}</span>
-                        </Link>
-                    ))}
-                    {latestPosts.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-border bg-card/60 p-6 text-sm text-muted-foreground">
-                            Stories are coming soon.
-                        </div>
-                    )}
-                </div>
-            </section>
+      <WaveDivider />
 
-            <section className="mx-auto mt-12 max-w-6xl space-y-6">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-foreground">Gallery highlights</h2>
-                        <p className="text-sm text-muted-foreground">Moments from the coast and the course.</p>
-                    </div>
-                    <Link className="text-sm font-semibold text-foreground" href="/gallery">
-                        View gallery
-                    </Link>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                    {featuredAlbums.map((album, idx) => (
-                        <Link
-                            key={`${album.Slug}-${idx}`}
-                            href={`/gallery/${album.URLSlug}`}
-                            className="rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-[2px] hover:border-primary/40"
-                        >
-                            <h3 className="text-lg font-semibold text-foreground">{album.Title}</h3>
-                            <p className="mt-2 text-sm text-muted-foreground">{album.Description}</p>
-                        </Link>
-                    ))}
-                    {featuredAlbums.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-border bg-card/60 p-6 text-sm text-muted-foreground">
-                            New album highlights are on the way.
-                        </div>
-                    )}
-                </div>
-            </section>
-        </main>
-    )
+      <section className="mx-auto mt-10 max-w-6xl px-4 sm:px-6 md:px-8">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <h2 className="font-display text-h1 text-foreground">From the shoreline</h2>
+          <Link href="/gallery" className="text-sm font-semibold text-primary hover:text-primary/80">
+            Open gallery
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {albumPreviews.map((album) => (
+            <Link key={album.urlSlug} href={`/gallery/${album.urlSlug}`} className="group overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="relative h-52 w-full bg-muted">
+                {album.imageUrl ? (
+                  <Image src={album.imageUrl} alt={album.imageAlt} fill className="object-cover transition duration-300 group-hover:scale-105" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{album.title}</div>
+                )}
+              </div>
+              <div className="p-4">
+                <p className="text-body font-semibold text-foreground">{album.title}</p>
+              </div>
+            </Link>
+          ))}
+          {albumPreviews.length === 0 ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-border p-6 text-body text-muted-foreground">
+              Gallery previews will appear here when albums are published.
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="mx-auto mt-12 max-w-6xl px-4 sm:px-6 md:px-8">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <h2 className="font-display text-h1 text-foreground">Latest field notes</h2>
+          <Link href="/blog" className="text-sm font-semibold text-primary hover:text-primary/80">
+            Read blog
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {featuredPosts.map((post) => (
+            <Link key={post.slug} href={`/blog/${post.url_slug}`} className="rounded-2xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-tide-300">
+              <p className="text-caption uppercase tracking-[0.2em] text-muted-foreground">
+                {(post.published_at || post.updated_at) ? formatDate(post.published_at || post.updated_at) : "Draft"}
+              </p>
+              <h3 className="mt-2 text-h4 font-semibold text-foreground">{post.title}</h3>
+              <p className="mt-2 text-body text-muted-foreground">{post.excerpt || "Read more about our estuary conservation work."}</p>
+            </Link>
+          ))}
+          {featuredPosts.length === 0 ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-border p-6 text-body text-muted-foreground">
+              Blog stories will appear here once published.
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </main>
+  )
 }

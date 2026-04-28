@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { apiFetch, apiGet, apiPost, apiPut } from "../../../../lib/api-client"
 import { useToast } from "../../../../components/toast"
 import { toastApiError } from "../../../../lib/toast-api-error"
@@ -90,11 +90,13 @@ export default function Page() {
         alt_text: ""
     })
 
-    const [media_file, setMediaFile] = useState<File | null>(null)
+    const [media_files, setMediaFiles] = useState<File[]>([])
     const { toast } = useToast()
 
     // field-level errors (shows where the issue is)
     const [field_errors, setFieldErrors] = useState<field_errors>({})
+    const initialFormRef = useRef("")
+    const draftKey = "admin_cms_post_draft_v1"
 
     const load_posts = async () => {
         try {
@@ -133,7 +135,23 @@ export default function Page() {
         void load_posts()
         void load_media()
         void load_hero_styles()
+        try {
+            const raw = localStorage.getItem(draftKey)
+            if (raw) {
+                const parsed = JSON.parse(raw)
+                setForm((prev) => ({ ...prev, ...parsed }))
+                setStatus("Draft restored")
+            }
+        } catch {
+            // ignore draft restore failures
+        }
     }, [])
+
+    useEffect(() => {
+        initialFormRef.current = JSON.stringify(form)
+        // only when switching records/resetting; not on every keystroke
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editing_slug])
 
     const reset_form = () => {
         setForm({
@@ -148,6 +166,11 @@ export default function Page() {
         })
         setEditingSlug(null)
         setFieldErrors({})
+        try {
+            localStorage.removeItem(draftKey)
+        } catch {
+            // ignore
+        }
     }
 
     const extract_body = (content: unknown) => {
@@ -247,6 +270,28 @@ export default function Page() {
         }
     }
 
+    useEffect(() => {
+        const t = window.setTimeout(() => {
+            try {
+                localStorage.setItem(draftKey, JSON.stringify(form))
+            } catch {
+                // ignore autosave failures
+            }
+        }, 400)
+        return () => window.clearTimeout(t)
+    }, [form])
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                e.preventDefault()
+                void handle_save()
+            }
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [form, editing_slug])
+
     const handle_edit = (post: cms_post) => {
         setForm({
             url_slug: post.url_slug,
@@ -286,6 +331,9 @@ export default function Page() {
 
         if (!url) next.media_url = "Media URL is required."
         else if (!is_valid_http_url(url)) next.media_url = "Enter a valid http(s) URL."
+        if (media_form.type === "image" && !media_form.alt_text.trim()) {
+            next.media_url = next.media_url ?? "Alt text is required for images."
+        }
 
         setFieldErrors((prev) => ({ ...prev, ...next }))
 
@@ -311,21 +359,27 @@ export default function Page() {
     }
 
     const handle_upload_media = async () => {
-        if (!media_file) {
-            setError("Choose a file to upload.")
+        if (media_files.length === 0) {
+            setError("Choose file(s) to upload.")
+            return
+        }
+        if (!media_form.alt_text.trim()) {
+            setError("Alt text is required for uploaded images.")
             return
         }
         setError(null)
         setStatus("Uploading media...")
         try {
-            const fd = new FormData()
-            fd.append("file", media_file)
-            if (media_form.alt_text.trim()) {
-                fd.append("alt_text", media_form.alt_text.trim())
+            for (let i = 0; i < media_files.length; i++) {
+                const file = media_files[i]
+                const fd = new FormData()
+                fd.append("file", file)
+                const suffix = media_files.length > 1 ? ` (${i + 1}/${media_files.length})` : ""
+                fd.append("alt_text", `${media_form.alt_text.trim()}${suffix}`)
+                await apiFetch("/admin/media/upload", { method: "POST", body: fd })
             }
-            await apiFetch("/admin/media/upload", { method: "POST", body: fd })
             setStatus("Media uploaded")
-            setMediaFile(null)
+            setMediaFiles([])
             setMediaForm((prev) => ({ ...prev, url: "", alt_text: "" }))
             await load_media()
         } catch (err) {
@@ -504,6 +558,24 @@ export default function Page() {
                 </div>
             </section>
 
+            <section className="sticky bottom-3 z-20 rounded-2xl border border-tide-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-slate-600">
+                        {JSON.stringify(form) === initialFormRef.current ? "No unsaved changes" : "Unsaved changes"}
+                        {" • "}
+                        Press <span className="font-semibold">⌘S / Ctrl+S</span> to save.
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button onClick={reset_form} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                            Reset
+                        </button>
+                        <button onClick={handle_save} className="rounded-full bg-forest px-3 py-1.5 text-xs font-semibold text-white">
+                            Save now
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -582,7 +654,7 @@ export default function Page() {
                         value={media_form.alt_text}
                         onChange={(e) => setMediaForm({ ...media_form, alt_text: e.target.value })}
                         className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="Alt text (optional)"
+                        placeholder="Alt text (required for images)"
                     />
                 </div>
 
@@ -590,12 +662,17 @@ export default function Page() {
                     <button onClick={handle_add_media} className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white">
                         Save media URL
                     </button>
-                    <input type="file" accept="image/*" onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)} />
+                    <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => setMediaFiles(Array.from(e.target.files ?? []))}
+                    />
                     <button
                         onClick={handle_upload_media}
                         className="rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
                     >
-                        Upload file
+                        Upload file{media_files.length > 1 ? "s" : ""}
                     </button>
                 </div>
 

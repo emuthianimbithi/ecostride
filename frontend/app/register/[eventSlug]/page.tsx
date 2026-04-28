@@ -3,13 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { z } from "zod"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { apiGet, apiPost } from "../../../lib/api-client"
 import { formatDate, registrationWindowStatus } from "../../../lib/format"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
 import { upsertRegistration } from "../../../lib/registrations-db"
+import { Stepper } from "../../../components/ui/stepper"
+import {
+    deleteRegistrationDraft,
+    getRegistrationDraft,
+    upsertRegistrationDraft
+} from "../../../lib/registration-drafts-db"
 
 type EventCategory = {
     slug: string
@@ -95,11 +101,77 @@ const steps = ["Category", "Athlete", "Extras", "Waiver", "Payment"]
 
 const baseField =
     "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+const floatingField =
+    "peer w-full rounded-xl border border-border bg-background px-3 pb-2 pt-5 text-sm text-foreground placeholder:text-transparent focus:outline-none focus:ring-2 focus:ring-primary/30"
+const floatingLabel =
+    "pointer-events-none absolute left-3 top-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:uppercase peer-focus:tracking-[0.12em] peer-focus:text-primary"
 const errorField = "border-destructive focus:ring-destructive/20"
 const errorText = "text-xs text-destructive mt-1"
 
 function cx(...classes: Array<string | false | null | undefined>) {
     return classes.filter(Boolean).join(" ")
+}
+
+function toErrorMessage(value: unknown) {
+    if (typeof value === "string") return value
+    if (value && typeof value === "object" && "message" in value) {
+        const msg = (value as { message?: unknown }).message
+        if (typeof msg === "string") return msg
+    }
+    return null
+}
+
+type FloatingInputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+    label: string
+    error?: string
+}
+
+function FloatingInput({ label, error, className, ...props }: FloatingInputProps) {
+    return (
+        <div className="space-y-1">
+            <label className="relative block">
+                <input className={cx(floatingField, error && errorField, className)} placeholder=" " {...props} />
+                <span className={floatingLabel}>{label}</span>
+            </label>
+            {error ? <p className={errorText}>{error}</p> : null}
+        </div>
+    )
+}
+
+type FloatingTextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    label: string
+    error?: string
+}
+
+function FloatingTextarea({ label, error, className, ...props }: FloatingTextareaProps) {
+    return (
+        <div className="space-y-1">
+            <label className="relative block">
+                <textarea className={cx(floatingField, "min-h-[108px] resize-y", error && errorField, className)} placeholder=" " {...props} />
+                <span className={floatingLabel}>{label}</span>
+            </label>
+            {error ? <p className={errorText}>{error}</p> : null}
+        </div>
+    )
+}
+
+type FloatingSelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
+    label: string
+    error?: string
+}
+
+function FloatingSelect({ label, error, className, children, ...props }: FloatingSelectProps) {
+    return (
+        <div className="space-y-1">
+            <label className="relative block">
+                <select className={cx(floatingField, "appearance-none", error && errorField, className)} {...props}>
+                    {children}
+                </select>
+                <span className={cx(floatingLabel, "top-1.5 text-[11px] uppercase tracking-[0.12em]")}>{label}</span>
+            </label>
+            {error ? <p className={errorText}>{error}</p> : null}
+        </div>
+    )
 }
 
 export default function Page() {
@@ -118,9 +190,8 @@ export default function Page() {
     const [step, setStep] = useState(0)
     const [status, setStatus] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
-
-    // ✅ Do NOT preload from localStorage; create is driven by click
-    const [registrationSlug, setRegistrationSlug] = useState<string>("")
+    const [errorSummary, setErrorSummary] = useState<string[]>([])
+    const [draftHydrated, setDraftHydrated] = useState(false)
     const creatingRef = useRef(false)
 
     const form = useForm<RegistrationForm>({
@@ -136,6 +207,7 @@ export default function Page() {
         },
         mode: "onTouched"
     })
+    const watchedValues = useWatch({ control: form.control })
 
     const stepFields = useMemo(
         () => [
@@ -162,10 +234,22 @@ export default function Page() {
     useEffect(() => {
         if (!eventSlug) return
 
-        // new route => clear per-page slug
-        setRegistrationSlug("")
+        form.reset({
+            categorySlug: "",
+            athleteName: "",
+            email: "",
+            phone: "",
+            currency: "KES",
+            paymentMethod: "stripe",
+            waiverAccepted: false
+        })
+        setFieldValues({})
+        setFieldErrors({})
+        setStep(0)
+        setErrorSummary([])
         setError(null)
         setStatus(null)
+        setDraftHydrated(false)
 
         apiGet<EventDetails>(`/public/events/${eventSlug}`)
             .then(setEvent)
@@ -182,7 +266,68 @@ export default function Page() {
         apiGet<EventFormField[]>(`/public/events/${eventSlug}/form-fields`)
             .then((data) => setFormFields([...data].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))))
             .catch(() => setFormFields([]))
-    }, [eventSlug])
+    }, [eventSlug, form])
+
+    useEffect(() => {
+        if (!eventSlug) return
+        let active = true
+
+        ;(async () => {
+            try {
+                const draft = await getRegistrationDraft(eventSlug)
+                if (!active) return
+                if (draft) {
+                    form.reset({
+                        categorySlug: String(draft.form_values.categorySlug ?? ""),
+                        athleteName: String(draft.form_values.athleteName ?? ""),
+                        email: String(draft.form_values.email ?? ""),
+                        phone: String(draft.form_values.phone ?? ""),
+                        dob: String(draft.form_values.dob ?? ""),
+                        gender: String(draft.form_values.gender ?? ""),
+                        nationality: String(draft.form_values.nationality ?? ""),
+                        residence: String(draft.form_values.residence ?? ""),
+                        tshirtSize: String(draft.form_values.tshirtSize ?? ""),
+                        emergencyName: String(draft.form_values.emergencyName ?? ""),
+                        emergencyPhone: String(draft.form_values.emergencyPhone ?? ""),
+                        medicalDeclaration: String(draft.form_values.medicalDeclaration ?? ""),
+                        experience: String(draft.form_values.experience ?? ""),
+                        extras: String(draft.form_values.extras ?? ""),
+                        waiverAccepted: draft.form_values.waiverAccepted === true,
+                        paymentMethod: draft.form_values.paymentMethod === "mpesa" ? "mpesa" : "stripe",
+                        currency:
+                            draft.form_values.currency === "USD" || draft.form_values.currency === "EUR"
+                                ? (draft.form_values.currency as "USD" | "EUR")
+                                : "KES",
+                        mpesaPhone: String(draft.form_values.mpesaPhone ?? "")
+                    })
+                    setFieldValues(draft.field_values ?? {})
+                    setStep(Math.max(0, Math.min(Number(draft.step ?? 0), steps.length - 1)))
+                }
+            } catch {
+                // ignore draft hydrate failures
+            } finally {
+                if (active) setDraftHydrated(true)
+            }
+        })()
+
+        return () => {
+            active = false
+        }
+    }, [eventSlug, form])
+
+    useEffect(() => {
+        if (!eventSlug || !draftHydrated) return
+        const timer = window.setTimeout(() => {
+            void upsertRegistrationDraft({
+                event_slug: eventSlug,
+                step,
+                form_values: watchedValues as unknown as Record<string, unknown>,
+                field_values: fieldValues
+            })
+        }, 250)
+
+        return () => window.clearTimeout(timer)
+    }, [eventSlug, step, watchedValues, fieldValues, draftHydrated])
 
     const getCategoryPrice = (currency: string, category?: EventCategory | null) => {
         if (!category) return 0
@@ -191,8 +336,20 @@ export default function Page() {
         return category.price_kes_minor
     }
 
+    const getStepErrors = (keys: string[]) => {
+        const messages: string[] = []
+        keys.forEach((key) => {
+            if (fieldErrors[key]) messages.push(fieldErrors[key])
+            const formError = (form.formState.errors as Record<string, unknown>)[key]
+            const msg = toErrorMessage(formError)
+            if (msg) messages.push(msg)
+        })
+        return Array.from(new Set(messages))
+    }
+
     const nextStep = async () => {
         setError(null)
+        setErrorSummary([])
 
         if (event && registrationWindowStatus(event.reg_open_at, event.reg_close_at) === "closed") {
             setError("Registration is closed for this event.")
@@ -220,6 +377,7 @@ export default function Page() {
             })
             setFieldErrors(errors)
             if (Object.keys(errors).length > 0) {
+                setErrorSummary(Array.from(new Set(Object.values(errors))))
                 toast({
                     title: "Validation Error",
                     description: "Please complete the required fields.",
@@ -232,6 +390,7 @@ export default function Page() {
         // Step 0: category selection
         if (step === 0 && categories.length > 0 && !form.getValues("categorySlug")) {
             form.setError("categorySlug", { type: "manual", message: "Select a category" })
+            setErrorSummary(["Select a category"])
             toast({
                 title: "Validation Error",
                 description: "Select a category to continue.",
@@ -244,6 +403,7 @@ export default function Page() {
         if (fields) {
             const valid = await form.trigger(fields as (keyof RegistrationForm)[], { shouldFocus: true })
             if (!valid) {
+                setErrorSummary(getStepErrors(fields as string[]))
                 toast({
                     title: "Validation Error",
                     description: "Please fix the highlighted fields.",
@@ -258,12 +418,14 @@ export default function Page() {
     }
 
     const prevStep = () => {
+        setErrorSummary([])
         setStep((prev) => Math.max(prev - 1, 0))
         window.scrollTo({ top: 0, behavior: "smooth" })
     }
 
     const createAndPay = form.handleSubmit(async (values) => {
         setError(null)
+        setErrorSummary([])
 
         if (creatingRef.current) return
         creatingRef.current = true
@@ -323,6 +485,7 @@ export default function Page() {
             if (!regSlug) throw new Error("Registration response missing slug")
 
             const regStatus = String(registration?.status ?? "").toLowerCase()
+            void deleteRegistrationDraft(eventSlug)
 
             await upsertRegistration({
                 slug: regSlug,
@@ -377,6 +540,11 @@ export default function Page() {
         } finally {
             creatingRef.current = false
         }
+    }, (invalidValues) => {
+        const messages = Object.values(invalidValues)
+            .map((item) => toErrorMessage(item))
+            .filter((msg): msg is string => Boolean(msg))
+        setErrorSummary(Array.from(new Set(messages)))
     })
 
     const onFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -406,12 +574,14 @@ export default function Page() {
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    {steps.map((label, index) => (
-                        <span key={label} className={index === step ? "text-primary font-semibold" : ""}>
-              {label}
-            </span>
-                    ))}
+                <div className="space-y-2">
+                    <Stepper
+                        steps={steps.map((label) => ({ id: label.toLowerCase(), label }))}
+                        currentStep={step}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Draft autosaves on this device for this event.
+                    </p>
                 </div>
 
                 <form
@@ -419,6 +589,16 @@ export default function Page() {
                     onSubmit={(e) => e.preventDefault()}
                     className="space-y-6 rounded-2xl border border-border/60 bg-card p-6 shadow-sm"
                 >
+                    {errorSummary.length > 0 && (
+                        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+                            <p className="text-sm font-semibold text-destructive">Please resolve the following:</p>
+                            <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
+                                {errorSummary.map((message, idx) => (
+                                    <li key={`${message}_${idx}`}>{message}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     {/* STEP 0 */}
                     {step === 0 && (
                         <div className="space-y-4">
@@ -450,43 +630,32 @@ export default function Page() {
                     {/* STEP 1 */}
                     {step === 1 && (
                         <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-1">
-                                <input
-                                    placeholder="Athlete name"
-                                    className={cx(baseField, form.formState.errors.athleteName && errorField)}
-                                    {...form.register("athleteName")}
-                                />
-                                {form.formState.errors.athleteName && (
-                                    <p className={errorText}>{form.formState.errors.athleteName.message}</p>
-                                )}
-                            </div>
+                            <FloatingInput
+                                label="Athlete name"
+                                error={form.formState.errors.athleteName?.message}
+                                {...form.register("athleteName")}
+                            />
 
-                            <div className="space-y-1">
-                                <input
-                                    placeholder="Email"
-                                    type="email"
-                                    className={cx(baseField, form.formState.errors.email && errorField)}
-                                    {...form.register("email")}
-                                />
-                                {form.formState.errors.email && <p className={errorText}>{form.formState.errors.email.message}</p>}
-                            </div>
+                            <FloatingInput
+                                label="Email"
+                                type="email"
+                                error={form.formState.errors.email?.message}
+                                {...form.register("email")}
+                            />
 
-                            <div className="space-y-1">
-                                <input
-                                    placeholder="Phone"
-                                    className={cx(baseField, form.formState.errors.phone && errorField)}
-                                    {...form.register("phone")}
-                                />
-                                {form.formState.errors.phone && <p className={errorText}>{form.formState.errors.phone.message}</p>}
-                            </div>
+                            <FloatingInput
+                                label="Phone"
+                                error={form.formState.errors.phone?.message}
+                                {...form.register("phone")}
+                            />
 
-                            <input placeholder="Date of birth" type="date" className={baseField} {...form.register("dob")} />
-                            <input placeholder="Gender" className={baseField} {...form.register("gender")} />
-                            <input placeholder="Nationality" className={baseField} {...form.register("nationality")} />
-                            <input placeholder="Residence" className={baseField} {...form.register("residence")} />
-                            <input placeholder="T-shirt size" className={baseField} {...form.register("tshirtSize")} />
-                            <input placeholder="Emergency contact name" className={baseField} {...form.register("emergencyName")} />
-                            <input placeholder="Emergency contact phone" className={baseField} {...form.register("emergencyPhone")} />
+                            <FloatingInput label="Date of birth" type="date" {...form.register("dob")} />
+                            <FloatingInput label="Gender" {...form.register("gender")} />
+                            <FloatingInput label="Nationality" {...form.register("nationality")} />
+                            <FloatingInput label="Residence" {...form.register("residence")} />
+                            <FloatingInput label="T-shirt size" {...form.register("tshirtSize")} />
+                            <FloatingInput label="Emergency contact name" {...form.register("emergencyName")} />
+                            <FloatingInput label="Emergency contact phone" {...form.register("emergencyPhone")} />
                         </div>
                     )}
 
@@ -586,9 +755,9 @@ export default function Page() {
                                 </div>
                             )}
 
-                            <textarea placeholder="Medical declaration" className={baseField} rows={3} {...form.register("medicalDeclaration")} />
-                            <textarea placeholder="Experience / notes" className={baseField} rows={3} {...form.register("experience")} />
-                            <textarea placeholder="Extras" className={baseField} rows={3} {...form.register("extras")} />
+                            <FloatingTextarea label="Medical declaration" rows={3} {...form.register("medicalDeclaration")} />
+                            <FloatingTextarea label="Experience / notes" rows={3} {...form.register("experience")} />
+                            <FloatingTextarea label="Extras" rows={3} {...form.register("extras")} />
                         </div>
                     )}
 
@@ -632,36 +801,62 @@ export default function Page() {
                                     <>
                                         <div className="space-y-2">
                                             <div className="grid gap-3 md:grid-cols-2">
-                                                <label className={cx("flex items-center gap-2 text-sm", form.formState.errors.paymentMethod && "text-destructive")}>
-                                                    <input type="radio" value="stripe" {...form.register("paymentMethod")} />
-                                                    Stripe Checkout
+                                                <label
+                                                    className={cx(
+                                                        "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition",
+                                                        form.watch("paymentMethod") === "stripe"
+                                                            ? "border-primary bg-primary/5"
+                                                            : "border-border/70 bg-background",
+                                                        form.formState.errors.paymentMethod && "border-destructive/50"
+                                                    )}
+                                                >
+                                                    <input className="sr-only" type="radio" value="stripe" {...form.register("paymentMethod")} />
+                                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-tide-100 text-xs font-semibold text-tide-700">
+                                                        STR
+                                                    </span>
+                                                    <span className="space-y-0.5">
+                                                        <span className="block font-semibold text-foreground">Stripe</span>
+                                                        <span className="block text-xs text-muted-foreground">Card / wallet checkout</span>
+                                                    </span>
                                                 </label>
-                                                <label className={cx("flex items-center gap-2 text-sm", form.formState.errors.paymentMethod && "text-destructive")}>
-                                                    <input type="radio" value="mpesa" {...form.register("paymentMethod")} />
-                                                    M-Pesa STK
+                                                <label
+                                                    className={cx(
+                                                        "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition",
+                                                        form.watch("paymentMethod") === "mpesa"
+                                                            ? "border-primary bg-primary/5"
+                                                            : "border-border/70 bg-background",
+                                                        form.formState.errors.paymentMethod && "border-destructive/50"
+                                                    )}
+                                                >
+                                                    <input className="sr-only" type="radio" value="mpesa" {...form.register("paymentMethod")} />
+                                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-forest-100 text-xs font-semibold text-forest-700">
+                                                        MP
+                                                    </span>
+                                                    <span className="space-y-0.5">
+                                                        <span className="block font-semibold text-foreground">M-Pesa</span>
+                                                        <span className="block text-xs text-muted-foreground">STK push on mobile</span>
+                                                    </span>
                                                 </label>
                                             </div>
                                             {form.formState.errors.paymentMethod && <p className={errorText}>{form.formState.errors.paymentMethod.message}</p>}
                                         </div>
 
-                                        <div className="space-y-1">
-                                            <select className={cx(baseField, form.formState.errors.currency && errorField)} {...form.register("currency")}>
+                                        <FloatingSelect
+                                            label="Currency"
+                                            error={form.formState.errors.currency?.message}
+                                            {...form.register("currency")}
+                                        >
                                                 <option value="KES">KES</option>
                                                 <option value="USD">USD</option>
                                                 <option value="EUR">EUR</option>
-                                            </select>
-                                            {form.formState.errors.currency && <p className={errorText}>{form.formState.errors.currency.message}</p>}
-                                        </div>
+                                        </FloatingSelect>
 
                                         {form.watch("paymentMethod") === "mpesa" && (
-                                            <div className="space-y-1">
-                                                <input
-                                                    placeholder="M-Pesa phone"
-                                                    className={cx(baseField, form.formState.errors.mpesaPhone && errorField)}
-                                                    {...form.register("mpesaPhone")}
-                                                />
-                                                {form.formState.errors.mpesaPhone && <p className={errorText}>{form.formState.errors.mpesaPhone.message}</p>}
-                                            </div>
+                                            <FloatingInput
+                                                label="M-Pesa phone"
+                                                error={form.formState.errors.mpesaPhone?.message}
+                                                {...form.register("mpesaPhone")}
+                                            />
                                         )}
                                     </>
                                 )
