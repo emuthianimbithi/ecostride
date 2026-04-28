@@ -109,10 +109,48 @@ export default function Page() {
         }
     }
 
+    type media_item_api = {
+        ID?: number
+        id?: number
+        slug: string
+        type: string
+        path: string
+        url: string
+        mime: string
+        size: number
+        alt_text: string
+        CreatedAt?: string
+        created_at?: string
+    }
+
+    type media_item = {
+        id: number
+        slug: string
+        type: string
+        path: string
+        url: string
+        mime: string
+        size: number
+        alt_text: string
+        created_at: string
+    }
+
+    const normalize_media = (item: media_item_api): media_item => ({
+        id: item.id ?? item.ID ?? 0,
+        slug: item.slug,
+        type: item.type,
+        path: item.path,
+        url: item.url,
+        mime: item.mime,
+        size: item.size,
+        alt_text: item.alt_text,
+        created_at: item.created_at ?? item.CreatedAt ?? ""
+    })
+
     const load_media = async () => {
         try {
-            const data = await apiGet<media_item[]>("/admin/media")
-            setMedia(Array.isArray(data) ? data : [])
+            const data = await apiGet<media_item_api[]>("/admin/media")
+            setMedia(Array.isArray(data) ? data.map(normalize_media).filter((m) => m.id > 0) : [])
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Failed to load media")
