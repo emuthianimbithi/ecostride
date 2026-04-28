@@ -147,7 +147,7 @@ export default function MediaLibraryPage() {
           <input
             type="file"
             multiple
-            accept="image/*,video/*"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,application/pdf"
             onChange={(e) => onDropFiles(e.target.files)}
             className="mt-3"
           />

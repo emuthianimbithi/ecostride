@@ -664,7 +664,7 @@ export default function Page() {
                     </button>
                     <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/mp4,video/webm"
                         multiple
                         onChange={(e) => setMediaFiles(Array.from(e.target.files ?? []))}
                     />
