@@ -34,7 +34,7 @@ func NewHandler(service *Service, auditService *audit.Service, cfg config.Config
 }
 
 type pageRequest struct {
-	Slug      string          `json:"slug"`
+	Slug      string          `json:"url_slug"`
 	Title     string          `json:"title" binding:"required"`
 	Status    string          `json:"status"`
 	Blocks    json.RawMessage `json:"blocks"`
@@ -44,7 +44,7 @@ type pageRequest struct {
 }
 
 type postRequest struct {
-	Slug            string          `json:"slug"`
+	Slug            string          `json:"url_slug"`
 	Title           string          `json:"title" binding:"required"`
 	Content         json.RawMessage `json:"content"`
 	Excerpt         string          `json:"excerpt"`
