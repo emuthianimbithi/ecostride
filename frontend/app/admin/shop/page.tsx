@@ -242,7 +242,7 @@ export default function ShopPage() {
     const payload = {
       type: form.type,
       name: form.name.trim(),
-      slug: form.slug.trim(),
+      url_slug: form.slug.trim(),
       description: form.description,
       price_kes_minor: toMinor(form.priceKES),
       price_usd_minor: toMinor(form.priceUSD),

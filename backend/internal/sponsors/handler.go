@@ -44,7 +44,7 @@ type tierRequest struct {
 type sponsorRequest struct {
 	TierSlug     string `json:"tier_slug" binding:"required"`
 	Name         string `json:"name" binding:"required"`
-	Slug         string `json:"slug" binding:"required"`
+	Slug         string `json:"url_slug" binding:"required"`
 	LogoMediaID  *uint  `json:"logo_media_id"`
 	Description  string `json:"description"`
 	WebsiteURL   string `json:"website_url"`

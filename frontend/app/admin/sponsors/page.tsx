@@ -291,7 +291,7 @@ export default function SponsorsPage() {
         const payload = {
             tier_slug: sponsorForm.tierSlug.trim(),
             name: sponsorForm.name.trim(),
-            slug: sponsorForm.slug.trim(),
+            url_slug: sponsorForm.slug.trim(),
             website_url: sponsorForm.websiteUrl.trim() || undefined,
             description: sponsorForm.description.trim() || undefined,
             is_featured: sponsorForm.isFeatured,

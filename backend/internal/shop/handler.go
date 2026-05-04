@@ -38,7 +38,7 @@ func NewHandler(service *Service, auditService *audit.Service, db *gorm.DB, paym
 type productRequest struct {
 	Type                string `json:"type" binding:"required"`
 	Name                string `json:"name" binding:"required"`
-	Slug                string `json:"slug" binding:"required"`
+	Slug                string `json:"url_slug" binding:"required"`
 	Description         string `json:"description"`
 	PrimaryImageMediaID *uint  `json:"primary_image_media_id"`
 	PriceKESMinor       *int   `json:"price_kes_minor"`

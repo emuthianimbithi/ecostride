@@ -28,7 +28,7 @@ func NewHandler(service *Service, cmsService *cms.Service, auditService *audit.S
 }
 
 type eventRequest struct {
-	Slug        string  `json:"slug" binding:"required"`
+	Slug        string  `json:"url_slug" binding:"required"`
 	Type        string  `json:"type" binding:"required"`
 	Title       string  `json:"title" binding:"required"`
 	Description string  `json:"description"`
