@@ -76,7 +76,7 @@ const config: Config = {
       },
       fontFamily: {
         display: ["Playfair Display", "Times New Roman", "serif"],
-        body: ["Space Grotesk", "Segoe UI", "sans-serif"]
+        body: ["DM Sans", "Space Grotesk", "Segoe UI", "sans-serif"]
       },
       fontSize: {
         "display-xl": ["4rem", { lineHeight: "1.05", letterSpacing: "-0.03em" }],

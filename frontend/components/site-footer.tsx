@@ -232,7 +232,7 @@ export function SiteFooter() {
             </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Phone className="h-4 w-4" />
-              +254 700 000 000
+              +254 791 648 304
             </div>
           </div>
 
