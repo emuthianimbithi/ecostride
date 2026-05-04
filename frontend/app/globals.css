@@ -1,89 +1,87 @@
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Core brand ramp: Tide = primary action + links */
-  --tide-50: 164 36% 96%;
-  --tide-100: 165 34% 90%;
-  --tide-200: 166 33% 82%;
-  --tide-300: 168 34% 70%;
-  --tide-400: 170 35% 56%;
-  --tide-500: 171 46% 41%;
-  --tide-600: 171 54% 33%;
-  --tide-700: 171 57% 26%;
-  --tide-800: 172 57% 20%;
-  --tide-900: 173 56% 14%;
+  /*
+   * Malindi Shores palette — beach marathon brand.
+   * Tide   = ocean teals       (#073744 → #48D6C9)
+   * Forest = navy / slate ink  (#0A1628 → #C2CDD7)  [reused as the deep ink tier]
+   * Sun    = gold → terracotta (#FFD166 → #C75B3A)  [accent + CTA]
+   * Sand   = cream beach tones (#F5E6D0 → #4F351B)
+   */
+  --tide-50: 180 35% 93%;
+  --tide-100: 175 35% 84%;
+  --tide-200: 172 35% 72%;
+  --tide-300: 175 65% 56%;
+  --tide-400: 175 60% 47%;
+  --tide-500: 188 65% 40%;
+  --tide-600: 190 70% 32%;
+  --tide-700: 193 73% 26%;
+  --tide-800: 194 80% 20%;
+  --tide-900: 196 82% 14%;
 
-  /* Supporting ramp: Forest = restoration + positive impact */
-  --forest-50: 142 36% 95%;
-  --forest-100: 144 31% 89%;
-  --forest-200: 146 29% 78%;
-  --forest-300: 148 28% 63%;
-  --forest-400: 150 33% 46%;
-  --forest-500: 151 45% 33%;
-  --forest-600: 152 52% 27%;
-  --forest-700: 153 54% 22%;
-  --forest-800: 154 55% 17%;
-  --forest-900: 156 56% 12%;
+  --forest-50: 213 18% 92%;
+  --forest-100: 212 21% 80%;
+  --forest-200: 211 18% 65%;
+  --forest-300: 210 16% 50%;
+  --forest-400: 208 22% 38%;
+  --forest-500: 211 28% 28%;
+  --forest-600: 203 47% 20%;
+  --forest-700: 205 50% 16%;
+  --forest-800: 211 51% 11%;
+  --forest-900: 217 60% 10%;
 
-  /* Accent ramp: Sun = highlights, warnings, countdown urgency */
-  --sun-50: 41 100% 97%;
-  --sun-100: 42 98% 91%;
-  --sun-200: 40 96% 82%;
-  --sun-300: 38 95% 72%;
-  --sun-400: 36 91% 63%;
-  --sun-500: 34 86% 56%;
-  --sun-600: 30 79% 49%;
-  --sun-700: 26 74% 42%;
-  --sun-800: 23 69% 35%;
-  --sun-900: 21 67% 28%;
+  --sun-50: 45 100% 95%;
+  --sun-100: 44 100% 87%;
+  --sun-200: 43 100% 77%;
+  --sun-300: 44 100% 70%;
+  --sun-400: 28 89% 67%;
+  --sun-500: 15 79% 60%;
+  --sun-600: 30 64% 53%;
+  --sun-700: 12 56% 51%;
+  --sun-800: 13 64% 39%;
+  --sun-900: 13 65% 29%;
 
-  /* Neutral ramp: Sand = warm UI surfaces and borders */
-  --sand-50: 32 41% 97%;
-  --sand-100: 32 35% 93%;
-  --sand-200: 31 31% 87%;
-  --sand-300: 31 27% 78%;
-  --sand-400: 30 24% 68%;
-  --sand-500: 30 22% 58%;
-  --sand-600: 30 23% 47%;
-  --sand-700: 29 25% 37%;
-  --sand-800: 28 27% 29%;
-  --sand-900: 27 29% 22%;
+  --sand-50: 36 75% 94%;
+  --sand-100: 33 53% 89%;
+  --sand-200: 34 50% 81%;
+  --sand-300: 36 50% 73%;
+  --sand-400: 34 44% 69%;
+  --sand-500: 33 44% 57%;
+  --sand-600: 34 41% 47%;
+  --sand-700: 30 43% 38%;
+  --sand-800: 29 45% 29%;
+  --sand-900: 27 49% 21%;
 
-  --background: 33 38% 97%;
-  --foreground: 171 22% 16%;
-  --card: 0 0% 100%;
-  --card-foreground: 171 22% 16%;
-  --muted: 32 24% 94%;
-  --muted-foreground: 176 8% 36%;
-  --border: 31 18% 80%;
-  --input: 31 18% 80%;
-  --primary: var(--tide-700);
-  --primary-foreground: 0 0% 100%;
+  --background: 33 53% 89%;        /* cream sand */
+  --foreground: 211 51% 11%;       /* deep navy ink */
+  --card: 36 75% 94%;
+  --card-foreground: 211 51% 11%;
+  --muted: 34 50% 81%;
+  --muted-foreground: 208 22% 38%;
+  --border: 36 50% 73%;
+  --input: 36 50% 73%;
+  --primary: var(--sand-700);
+  --primary-foreground: 33 53% 89%;
   --secondary: var(--sand-100);
-  --secondary-foreground: 171 22% 16%;
+  --secondary-foreground: 211 51% 11%;
   --destructive: 0 70% 45%;
   --destructive-foreground: 0 0% 100%;
-  --ring: var(--sun-600);
-  --surface: 0 0% 100%;
-  --text-strong: 172 56% 12%;
+  --ring: var(--sand-400);
+  --surface: 36 75% 94%;
+  --text-strong: 217 60% 10%;
   --danger: 0 72% 44%;
-  --success: 149 56% 30%;
-  --warning: 34 86% 46%;
+  --success: 175 60% 35%;
+  --warning: 28 89% 60%;
 }
 
 body {
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  font-family: "DM Sans", "Space Grotesk", "Segoe UI", sans-serif;
   color: hsl(var(--foreground));
-  background: radial-gradient(
-    1200px 600px at 10% -10%,
-    hsl(var(--tide-100)) 0%,
-    hsl(var(--background)) 50%,
-    hsl(var(--sand-100)) 100%
-  );
+  background: hsl(var(--background));
   min-height: 100vh;
 }
 
@@ -95,8 +93,8 @@ h4 {
 }
 
 :focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--sand-400) / 0.55);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -122,7 +120,70 @@ h4 {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity 0.6s ease,
+      transform 0.6s ease;
+  }
+
+  .reveal-on-scroll.is-visible,
   .motion-safe-reveal {
+    opacity: 1;
+    transform: translateY(0);
     animation: fade-in-up 0.6s ease-out both;
   }
+}
+
+.editorial-image {
+  filter: saturate(0.94) contrast(1.04);
+}
+
+.editorial-placeholder {
+  background:
+    linear-gradient(180deg, rgba(247, 240, 229, 0.16), rgba(247, 240, 229, 0.02)),
+    linear-gradient(135deg, rgba(21, 58, 94, 0.92), rgba(62, 124, 171, 0.74) 56%, rgba(233, 216, 188, 0.9));
+}
+
+.grain-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.18rem;
+  height: 1px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: currentColor;
+  transition: transform 0.2s ease;
+}
+
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.button-lift {
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.button-lift:hover {
+  transform: translateY(-1px);
 }

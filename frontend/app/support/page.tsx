@@ -5,6 +5,7 @@ import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { apiGet, apiPost } from "../../lib/api-client"
+import { Eyebrow } from "../../components/eyebrow"
 import { formatMoney } from "../../lib/format"
 import { useToast } from "../../components/toast"
 import { toastApiError } from "../../lib/toast-api-error"
@@ -111,29 +112,33 @@ export default function Page() {
   })
 
   return (
-    <main className="px-6 py-12 md:py-16">
-      <div className="mx-auto max-w-5xl space-y-10">
-        <div className="space-y-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Fundraising Shop</h1>
-          <p className="text-sm text-muted-foreground md:text-base">
-            Support EcoStride with donations or limited-run merch.
+    <main className="px-6 py-12 md:py-20">
+      <div className="mx-auto max-w-6xl space-y-10">
+        <div className="max-w-2xl space-y-3">
+          <Eyebrow>Support</Eyebrow>
+          <h1 className="font-display text-h1 text-foreground md:text-display-lg">Back the coastline with donations, merch, and direct event support.</h1>
+          <p className="text-base leading-8 text-muted-foreground">
+            The checkout stays practical. The message stays clear: this is how cleanup, restoration, and race logistics get funded.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <section className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Products</h2>
+          <section className="space-y-4 border border-sand-200 bg-background p-6">
+            <div className="space-y-2">
+              <Eyebrow>Support options</Eyebrow>
+              <h2 className="font-display text-h2 text-foreground">Choose what you are funding.</h2>
+            </div>
             <div className="grid gap-3">
               {products.map((product) => (
                 <button
                   key={product.slug}
                   onClick={() => setSelected(product)}
-                  className={`rounded-xl border px-4 py-3 text-left text-sm transition hover:border-primary/30 ${selected?.slug === product.slug
-                    ? "border-primary/40 bg-primary/5 text-foreground"
-                    : "border-border/60 bg-background text-muted-foreground"
+                  className={`border px-4 py-4 text-left text-sm transition ${selected?.slug === product.slug
+                    ? "border-forest-300 bg-forest-50 text-foreground"
+                    : "border-sand-200 bg-background text-muted-foreground hover:border-sand-300"
                     }`}
                 >
-                  <div className="font-semibold text-foreground">{product.name}</div>
+                  <div className="font-display text-h3 text-foreground">{product.name}</div>
                   <div className="text-xs text-muted-foreground">{product.description}</div>
                     {[
                         product.price_kes_minor != null ? formatMoney("KES", product.price_kes_minor) : null,
@@ -154,51 +159,54 @@ export default function Page() {
                 </button>
               ))}
               {products.length === 0 && (
-                <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                  No products yet.
+                <div className="border border-dashed border-sand-300 p-4 text-sm text-muted-foreground">
+                  No support products yet. We&apos;ll add the next fundraising option soon.
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Checkout</h2>
+          <section className="space-y-4 border border-sand-200 bg-sand-50 p-6">
+            <div className="space-y-2">
+              <Eyebrow>Checkout</Eyebrow>
+              <h2 className="font-display text-h2 text-foreground">Simple payment, no extra noise.</h2>
+            </div>
             <form onSubmit={onSubmit} className="space-y-3">
               {selected && (
-                <div className="rounded-xl border border-border/60 bg-muted px-4 py-3 text-sm text-muted-foreground">
+                <div className="border border-sand-200 bg-background px-4 py-3 text-sm text-muted-foreground">
                   Supporting: <span className="font-semibold text-foreground">{selected.name}</span>
                 </div>
               )}
               <input
                 placeholder="Name"
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                 {...form.register("name")}
               />
               <input
                 placeholder="Email"
                 type="email"
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                 {...form.register("email")}
               />
               <input
                 placeholder="Phone"
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                 {...form.register("phone")}
               />
               {selected?.allow_custom_amount && (
                 <input
                   placeholder="Custom amount"
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                   {...form.register("customAmount")}
                 />
               )}
               <input
                 placeholder="Quantity"
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                 {...form.register("qty")}
               />
               <select
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                 {...form.register("currency")}
               >
                 <option value="KES">KES</option>
@@ -218,7 +226,7 @@ export default function Page() {
               {form.watch("paymentMethod") === "mpesa" && (
                 <input
                   placeholder="M-Pesa phone"
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
                   {...form.register("mpesaPhone")}
                 />
               )}
@@ -226,7 +234,7 @@ export default function Page() {
               {status && <p className="text-sm text-muted-foreground">{status}</p>}
               <button
                 type="submit"
-                className="w-full rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                className="button-lift w-full rounded-full bg-sand-300 px-4 py-3 text-sm font-semibold text-forest-900 transition hover:bg-sand-200"
               >
                 Checkout
               </button>

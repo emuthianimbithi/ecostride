@@ -1,0 +1,165 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skyGrad" x1="600" y1="0" x2="600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E5DAC8"/>
+      <stop offset="55%" stop-color="#F2EBDF"/>
+      <stop offset="100%" stop-color="#FBF2E4"/>
+    </linearGradient>
+    <linearGradient id="deepWater" x1="600" y1="650" x2="600" y2="930" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2A5E87"/>
+      <stop offset="100%" stop-color="#3A739F"/>
+    </linearGradient>
+    <linearGradient id="shallowWater" x1="600" y1="800" x2="600" y2="1050" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7CAFD0"/>
+      <stop offset="70%" stop-color="#A0C8DE"/>
+      <stop offset="100%" stop-color="#BBDAEC"/>
+    </linearGradient>
+    <linearGradient id="sandGrad" x1="600" y1="940" x2="600" y2="1500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D8C6A8"/>
+      <stop offset="35%" stop-color="#CDB890"/>
+      <stop offset="100%" stop-color="#C4A87A"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="877" cy="232" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF8E7" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#EFE2CC" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#EFE2CC" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="sandTexture">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.06"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" mode="overlay"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="6" stdDeviation="10" flood-color="#153A5E" flood-opacity="0.12"/>
+    </filter>
+    <!-- Person glow for warmth -->
+    <radialGradient id="warmGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#F5EBDD" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#F5EBDD" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="1200" height="1500" fill="url(#skyGrad)"/>
+
+  <!-- Clouds -->
+  <ellipse cx="220" cy="150" rx="180" ry="28" fill="#EFE2CC" opacity="0.25"/>
+  <ellipse cx="300" cy="145" rx="100" ry="20" fill="#EFE2CC" opacity="0.2"/>
+  <ellipse cx="650" cy="100" rx="150" ry="22" fill="#EFE2CC" opacity="0.18"/>
+  <ellipse cx="480" cy="320" rx="130" ry="18" fill="#EFE2CC" opacity="0.12"/>
+
+  <!-- Sun glow -->
+  <circle cx="877" cy="232" r="200" fill="url(#sunGlow)"/>
+  <!-- Sun -->
+  <circle cx="877" cy="232" r="92" fill="#EFE2CC"/>
+  <circle cx="877" cy="232" r="80" fill="#F5EBDD"/>
+  <circle cx="877" cy="232" r="66" fill="#FFF8E7" opacity="0.55"/>
+
+  <!-- Distant birds -->
+  <g stroke="#3A739F" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.25">
+    <path d="M520 200C525 194 530 194 535 200"/>
+    <path d="M560 210C565 204 570 204 575 210"/>
+    <path d="M545 185C550 179 555 179 560 185"/>
+  </g>
+
+  <!-- Sand base -->
+  <rect y="952" width="1200" height="548" fill="url(#sandGrad)" filter="url(#sandTexture)"/>
+
+  <!-- Deep water -->
+  <path d="M0 707C142 642 305 627 470 664C642 704 796 811 980 822C1055 826 1128 817 1200 789V916C1127 939 1051 949 967 945C785 936 639 836 467 801C303 767 147 783 0 858V707Z" fill="url(#deepWater)"/>
+  <!-- Water shimmer -->
+  <path d="M0 707C142 642 305 627 470 664C642 704 796 811 980 822C1055 826 1128 817 1200 789V800C1128 828 1055 838 980 834C796 823 642 716 470 676C305 639 142 654 0 719V707Z" fill="#4A8FC2" opacity="0.35"/>
+
+  <!-- Shallow water -->
+  <path d="M0 813C143 733 304 704 467 742C634 780 781 883 966 892C1050 896 1128 883 1200 859V1036H0V813Z" fill="url(#shallowWater)"/>
+
+  <!-- Foam -->
+  <path d="M0 960C100 945 220 940 360 948C500 956 600 972 750 975C880 977 980 965 1100 950C1160 943 1180 948 1200 955" stroke="white" stroke-width="4.5" stroke-linecap="round" opacity="0.45"/>
+  <path d="M0 975C120 962 260 958 400 965C550 973 660 985 800 986C920 987 1040 975 1200 960" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- Community warm glow under group -->
+  <ellipse cx="560" cy="1050" rx="380" ry="120" fill="url(#warmGlow)" opacity="0.5"/>
+
+  <!-- Person 1 (leftmost) -->
+  <g filter="url(#softShadow)">
+    <circle cx="286" cy="968" r="30" fill="#153A5E"/>
+    <path d="M265 995C265 995 274 1015 286 1020C298 1015 307 995 307 995" stroke="#153A5E" stroke-width="16" stroke-linecap="round" fill="none"/>
+    <path d="M286 1020L286 1090" stroke="#153A5E" stroke-width="16" stroke-linecap="round"/>
+    <path d="M286 1090L265 1160" stroke="#153A5E" stroke-width="14" stroke-linecap="round"/>
+    <path d="M286 1090L310 1158" stroke="#153A5E" stroke-width="14" stroke-linecap="round"/>
+    <!-- Arm reaching to person 2 -->
+    <path d="M295 1035L355 1020" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+    <!-- Other arm -->
+    <path d="M277 1035L235 1075" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Person 2 -->
+  <g filter="url(#softShadow)">
+    <circle cx="430" cy="980" r="32" fill="#153A5E"/>
+    <path d="M407 1009C407 1009 417 1032 430 1037C443 1032 453 1009 453 1009" stroke="#153A5E" stroke-width="17" stroke-linecap="round" fill="none"/>
+    <path d="M430 1037L430 1112" stroke="#153A5E" stroke-width="17" stroke-linecap="round"/>
+    <path d="M430 1112L405 1185" stroke="#153A5E" stroke-width="15" stroke-linecap="round"/>
+    <path d="M430 1112L458 1183" stroke="#153A5E" stroke-width="15" stroke-linecap="round"/>
+    <!-- Arms connecting to neighbors -->
+    <path d="M420 1050L365 1030" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+    <path d="M442 1050L510 1035" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Person 3 (tallest, center) -->
+  <g filter="url(#softShadow)">
+    <circle cx="580" cy="960" r="35" fill="#153A5E"/>
+    <path d="M555 992C555 992 566 1018 580 1024C594 1018 605 992 605 992" stroke="#153A5E" stroke-width="18" stroke-linecap="round" fill="none"/>
+    <path d="M580 1024L580 1108" stroke="#153A5E" stroke-width="18" stroke-linecap="round"/>
+    <path d="M580 1108L552 1190" stroke="#153A5E" stroke-width="16" stroke-linecap="round"/>
+    <path d="M580 1108L610 1188" stroke="#153A5E" stroke-width="16" stroke-linecap="round"/>
+    <!-- Arms up/connected -->
+    <path d="M568 1040L520 1040" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+    <path d="M592 1040L655 1030" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Person 4 -->
+  <g filter="url(#softShadow)">
+    <circle cx="720" cy="975" r="30" fill="#153A5E"/>
+    <path d="M700 1002C700 1002 709 1022 720 1027C731 1022 740 1002 740 1002" stroke="#153A5E" stroke-width="16" stroke-linecap="round" fill="none"/>
+    <path d="M720 1027L720 1095" stroke="#153A5E" stroke-width="16" stroke-linecap="round"/>
+    <path d="M720 1095L697 1165" stroke="#153A5E" stroke-width="14" stroke-linecap="round"/>
+    <path d="M720 1095L745 1163" stroke="#153A5E" stroke-width="14" stroke-linecap="round"/>
+    <!-- Arms -->
+    <path d="M710 1045L665 1035" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+    <path d="M732 1045L790 1030" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Person 5 (rightmost) -->
+  <g filter="url(#softShadow)">
+    <circle cx="855" cy="968" r="28" fill="#153A5E"/>
+    <path d="M836 993C836 993 844 1012 855 1016C866 1012 874 993 874 993" stroke="#153A5E" stroke-width="15" stroke-linecap="round" fill="none"/>
+    <path d="M855 1016L855 1082" stroke="#153A5E" stroke-width="15" stroke-linecap="round"/>
+    <path d="M855 1082L835 1150" stroke="#153A5E" stroke-width="13" stroke-linecap="round"/>
+    <path d="M855 1082L878 1148" stroke="#153A5E" stroke-width="13" stroke-linecap="round"/>
+    <!-- Arm reaching to person 4 -->
+    <path d="M845 1038L800 1032" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+    <path d="M865 1038L905 1070" stroke="#153A5E" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Connecting wave between people (community bond) -->
+  <path d="M246 1050C318 1005 394 995 467 1030C533 1060 579 1120 661 1128C739 1135 801 1090 866 1040" stroke="#3A739F" stroke-width="5" stroke-linecap="round" opacity="0.2"/>
+
+  <!-- Foreground sand dune -->
+  <path d="M180 1218C346 1175 527 1167 715 1203C887 1236 1037 1299 1200 1383V1500H0V1348C46 1322 101 1294 180 1218Z" fill="#F5EBDD"/>
+
+  <!-- Sand ripples -->
+  <path d="M80 1320C230 1285 400 1280 600 1295C780 1308 960 1340 1150 1390" stroke="#DDD0B8" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <path d="M230 1267C345 1237 459 1234 583 1257C707 1280 826 1324 950 1382" stroke="#C8B08A" stroke-width="8" stroke-linecap="round" opacity="0.5"/>
+  <path d="M0 1440C180 1415 380 1410 600 1425C800 1438 1000 1460 1200 1485" stroke="#DDD0B8" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Shell details on sand -->
+  <g opacity="0.2">
+    <path d="M400 1290C404 1282 412 1282 416 1290C412 1286 404 1286 400 1290Z" fill="#153A5E"/>
+    <path d="M750 1330C754 1322 762 1322 766 1330C762 1326 754 1326 750 1330Z" fill="#153A5E"/>
+    <circle cx="550" cy="1260" r="4" fill="#153A5E"/>
+    <circle cx="920" cy="1350" r="3" fill="#153A5E"/>
+  </g>
+</svg>

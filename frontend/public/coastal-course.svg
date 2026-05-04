@@ -1,0 +1,156 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skyGrad" x1="600" y1="0" x2="600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E3D8C5"/>
+      <stop offset="55%" stop-color="#F0E9DC"/>
+      <stop offset="100%" stop-color="#FAF0E1"/>
+    </linearGradient>
+    <linearGradient id="deepWater" x1="600" y1="640" x2="600" y2="910" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2D6390"/>
+      <stop offset="100%" stop-color="#3D78A8"/>
+    </linearGradient>
+    <linearGradient id="shallowWater" x1="600" y1="840" x2="600" y2="1050" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#80B4D2"/>
+      <stop offset="65%" stop-color="#A3CCDF"/>
+      <stop offset="100%" stop-color="#BEE0ED"/>
+    </linearGradient>
+    <linearGradient id="sandGrad" x1="600" y1="935" x2="600" y2="1500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D8C4A2"/>
+      <stop offset="35%" stop-color="#CFBA8E"/>
+      <stop offset="100%" stop-color="#C6AB7C"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="944" cy="289" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF8E7" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#EFE2CC" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#EFE2CC" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="sandTexture">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.06"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" mode="overlay"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="6" stdDeviation="10" flood-color="#14385B" flood-opacity="0.12"/>
+    </filter>
+    <!-- Trail glow -->
+    <filter id="trailGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="1200" height="1500" fill="url(#skyGrad)"/>
+
+  <!-- Clouds -->
+  <ellipse cx="180" cy="170" rx="170" ry="26" fill="#EFE2CC" opacity="0.22"/>
+  <ellipse cx="260" cy="165" rx="90" ry="18" fill="#EFE2CC" opacity="0.18"/>
+  <ellipse cx="600" cy="120" rx="200" ry="30" fill="#EFE2CC" opacity="0.2"/>
+  <ellipse cx="720" cy="115" rx="110" ry="20" fill="#EFE2CC" opacity="0.15"/>
+  <ellipse cx="400" cy="350" rx="120" ry="16" fill="#EFE2CC" opacity="0.1"/>
+
+  <!-- Sun glow -->
+  <circle cx="944" cy="289" r="200" fill="url(#sunGlow)"/>
+  <!-- Sun -->
+  <circle cx="944" cy="289" r="92" fill="#EFE2CC"/>
+  <circle cx="944" cy="289" r="80" fill="#F5EBDD"/>
+  <circle cx="944" cy="289" r="66" fill="#FFF8E7" opacity="0.55"/>
+
+  <!-- Birds -->
+  <g stroke="#3D78A8" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.2">
+    <path d="M200 260C206 253 212 253 218 260"/>
+    <path d="M240 248C246 241 252 241 258 248"/>
+  </g>
+
+  <!-- Sand base -->
+  <rect y="945" width="1200" height="555" fill="url(#sandGrad)" filter="url(#sandTexture)"/>
+
+  <!-- Deep water -->
+  <path d="M0 747C162 673 314 648 470 679C642 713 751 829 925 839C1021 844 1110 822 1200 781V900C1109 944 1014 965 919 963C741 958 637 846 470 810C314 777 162 793 0 887V747Z" fill="url(#deepWater)"/>
+  <!-- Water shimmer -->
+  <path d="M0 747C162 673 314 648 470 679C642 713 751 829 925 839C1021 844 1110 822 1200 781V794C1110 834 1021 856 925 851C751 841 642 725 470 691C314 660 162 685 0 759V747Z" fill="#4D90C5" opacity="0.35"/>
+
+  <!-- Shallow water -->
+  <path d="M0 855C167 762 319 731 470 760C640 794 739 908 918 916C1012 920 1107 901 1200 857V1036H0V855Z" fill="url(#shallowWater)"/>
+
+  <!-- Foam -->
+  <path d="M0 950C120 935 250 930 400 940C560 951 680 968 830 970C960 972 1060 960 1200 945" stroke="white" stroke-width="4.5" stroke-linecap="round" opacity="0.45"/>
+  <path d="M0 965C140 952 290 948 450 955C610 963 730 978 880 980C1010 981 1100 970 1200 958" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- Course trail - outer glow -->
+  <path d="M203 1176C322 1079 447 1037 561 1045C698 1055 796 1123 921 1117" stroke="#F7F1E6" stroke-width="32" stroke-linecap="round" opacity="0.6" filter="url(#trailGlow)"/>
+  <!-- Course trail - main path -->
+  <path d="M203 1176C322 1079 447 1037 561 1045C698 1055 796 1123 921 1117" stroke="#F7F1E6" stroke-width="24" stroke-linecap="round"/>
+  <!-- Course trail - dashed center line -->
+  <path d="M204 1175C323 1078 447 1037 560 1045C697 1055 794 1122 920 1116" stroke="#14385B" stroke-width="5" stroke-dasharray="16 16" stroke-linecap="round"/>
+
+  <!-- Distance markers along trail -->
+  <g opacity="0.35">
+    <circle cx="320" cy="1118" r="8" fill="#14385B"/>
+    <circle cx="450" cy="1050" r="8" fill="#14385B"/>
+    <circle cx="620" cy="1060" r="8" fill="#14385B"/>
+    <circle cx="780" cy="1105" r="8" fill="#14385B"/>
+  </g>
+
+  <!-- Start marker -->
+  <g filter="url(#softShadow)">
+    <circle cx="209" cy="1170" r="28" fill="#14385B"/>
+    <circle cx="209" cy="1170" r="20" fill="#F7F1E6"/>
+    <circle cx="209" cy="1170" r="12" fill="#14385B"/>
+    <!-- Flag pole -->
+    <path d="M209 1142L209 1098" stroke="#14385B" stroke-width="5" stroke-linecap="round"/>
+    <!-- Flag -->
+    <path d="M209 1098L245 1108L209 1118" fill="#3D78A8" stroke="#14385B" stroke-width="2"/>
+  </g>
+
+  <!-- End marker -->
+  <g filter="url(#softShadow)">
+    <circle cx="916" cy="1116" r="28" fill="#14385B"/>
+    <circle cx="916" cy="1116" r="20" fill="#F7F1E6"/>
+    <circle cx="916" cy="1116" r="12" fill="#14385B"/>
+    <!-- Flag pole -->
+    <path d="M916 1088L916 1044" stroke="#14385B" stroke-width="5" stroke-linecap="round"/>
+    <!-- Checkered flag -->
+    <path d="M916 1044L952 1054L916 1064" fill="#F7F1E6" stroke="#14385B" stroke-width="2"/>
+    <path d="M916 1044L934 1049L916 1054" fill="#14385B"/>
+    <path d="M934 1049L952 1054L934 1059" fill="#14385B"/>
+  </g>
+
+  <!-- Small figure on trail -->
+  <g opacity="0.5" filter="url(#softShadow)">
+    <circle cx="555" cy="1030" r="12" fill="#14385B"/>
+    <path d="M555 1042L555 1060" stroke="#14385B" stroke-width="6" stroke-linecap="round"/>
+    <path d="M555 1060L545 1078" stroke="#14385B" stroke-width="5" stroke-linecap="round"/>
+    <path d="M555 1060L565 1078" stroke="#14385B" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Beach grass tufts -->
+  <g stroke="#8FA87A" stroke-width="3" stroke-linecap="round" opacity="0.35">
+    <path d="M100 1020L95 985"/>
+    <path d="M100 1020L108 988"/>
+    <path d="M100 1020L88 992"/>
+    <path d="M1080 1000L1075 965"/>
+    <path d="M1080 1000L1088 968"/>
+    <path d="M1080 1000L1070 972"/>
+  </g>
+
+  <!-- Foreground sand dune -->
+  <path d="M129 1325C303 1262 500 1245 692 1271C864 1294 1031 1352 1200 1425V1500H0V1397C34 1380 78 1356 129 1325Z" fill="#F5EBDD"/>
+
+  <!-- Sand ripples -->
+  <path d="M60 1380C220 1340 420 1335 640 1350C840 1363 1020 1395 1180 1440" stroke="#DDD0B8" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <path d="M0 1440C200 1415 400 1410 620 1425C820 1438 1000 1460 1200 1485" stroke="#DDD0B8" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Shells -->
+  <g opacity="0.18">
+    <circle cx="380" cy="1300" r="4" fill="#14385B"/>
+    <circle cx="800" cy="1340" r="3.5" fill="#14385B"/>
+    <path d="M600 1310C604 1302 612 1302 616 1310" fill="#14385B"/>
+  </g>
+</svg>

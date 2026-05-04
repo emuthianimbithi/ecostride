@@ -1,5 +1,8 @@
 import Image from "next/image"
 import Link from "next/link"
+import { Eyebrow } from "../../components/eyebrow"
+import { Reveal } from "../../components/reveal"
+import { Section } from "../../components/section"
 import { serverGet } from "../../lib/api-server"
 import { normalizeSponsor } from "../../lib/normalize-sponsor"
 
@@ -12,79 +15,78 @@ export default async function Page() {
   }
 
   const normalized = sponsors.map(normalizeSponsor)
+  const grouped = normalized.reduce<Record<string, typeof normalized>>((acc, sponsor) => {
+    const key = sponsor.tier.name || "Partners"
+    acc[key] = acc[key] || []
+    acc[key].push(sponsor)
+    return acc
+  }, {})
+
+  const tiers = Object.entries(grouped).sort((a, b) => {
+    const aPriority = a[1][0]?.tier.priority ?? 999
+    const bPriority = b[1][0]?.tier.priority ?? 999
+    return aPriority - bPriority
+  })
 
   return (
-    <main className="px-6 py-12 md:py-16">
-      <div className="mx-auto max-w-6xl space-y-10">
-        <div className="space-y-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Sponsors</h1>
-          <p className="text-sm text-muted-foreground md:text-base">
-            Partners powering EcoStride events and coastal impact.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-foreground">Become a sponsor</h2>
-              <p className="text-sm text-muted-foreground">
-                Support community races, environmental cleanups, and youth programs.
+    <main>
+      <Section>
+        <Reveal className="space-y-12">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div className="max-w-2xl space-y-3">
+              <Eyebrow>Sponsors</Eyebrow>
+              <h1 className="font-display text-h1 text-foreground md:text-display-lg">Tiered partners backing race logistics, cleanup work, and the public face of EcoStride.</h1>
+              <p className="text-base leading-8 text-muted-foreground">
+                Top-tier logos carry more visual weight. Lower tiers stay present without pretending every partnership is the same shape.
               </p>
             </div>
             <Link
-              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              className="button-lift inline-flex h-11 items-center justify-center rounded-full bg-sand-300 px-5 text-sm font-semibold text-forest-900 hover:bg-sand-200"
               href="/contact"
             >
               Sponsor inquiry
             </Link>
           </div>
-        </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          {normalized.map((sponsor) => (
-            <Link
-              key={sponsor.slug}
-              href={`/sponsors/${sponsor.url_slug}`}
-              className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-            >
-              <div className="flex items-center gap-3">
-                {sponsor.logo.url ? (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
-                    <Image
-                      src={sponsor.logo.url}
-                      alt={sponsor.logo.alt || sponsor.name}
-                      width={72}
-                      height={72}
-                      className="h-8 w-8 object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-sm font-semibold text-foreground">
-                    {sponsor.name.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">{sponsor.name}</h2>
-                  {sponsor.tier.name && (
-                    <span className="mt-1 inline-flex rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {sponsor.tier.name}
-                    </span>
-                  )}
+          <div className="space-y-12">
+            {tiers.map(([tierName, items], tierIndex) => (
+              <section key={tierName} className="space-y-6 border-t border-sand-200 pt-6">
+                <div className="space-y-2">
+                  <Eyebrow>{tierName}</Eyebrow>
+                  <h2 className="font-display text-h2 text-foreground">{tierIndex === 0 ? "Lead supporters" : "Supporting partners"}</h2>
                 </div>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{sponsor.description || ""}</p>
-              {sponsor.website_url && (
-                <span className="mt-3 inline-flex text-xs font-semibold text-primary">{sponsor.website_url}</span>
-              )}
-            </Link>
-          ))}
-          {normalized.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-              No sponsors yet.
-            </div>
-          )}
-        </div>
-      </div>
+                <div className={`grid gap-6 ${tierIndex === 0 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+                  {items.map((sponsor) => (
+                    <Link key={sponsor.slug} href={`/sponsors/${sponsor.url_slug}`} className="group space-y-4">
+                      <div className="flex min-h-[148px] items-center justify-center border border-sand-200 bg-background p-8 transition group-hover:border-forest-300">
+                        {sponsor.logo.url ? (
+                          <Image
+                            src={sponsor.logo.url}
+                            alt={sponsor.logo.alt || sponsor.name}
+                            width={tierIndex === 0 ? 180 : 120}
+                            height={tierIndex === 0 ? 180 : 120}
+                            className="max-h-20 w-auto object-contain"
+                          />
+                        ) : (
+                          <span className="font-display text-3xl text-foreground">{sponsor.name}</span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-display text-h3 text-foreground transition-colors group-hover:text-forest-700">{sponsor.name}</h3>
+                        <p className="text-sm leading-7 text-muted-foreground">{sponsor.description || "Sponsor profile"}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ))}
+
+            {normalized.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No sponsors yet. The first partner profile will appear here once published.</p>
+            ) : null}
+          </div>
+        </Reveal>
+      </Section>
     </main>
   )
 }

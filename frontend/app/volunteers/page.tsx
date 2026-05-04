@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { apiGet, apiPost } from "../../lib/api-client"
+import { Eyebrow } from "../../components/eyebrow"
 
 const volunteerSchema = z.object({
   name: z.string().min(2),
@@ -58,37 +59,60 @@ export default function Page() {
   })
 
   return (
-    <main className="px-6 py-12 md:py-16">
-      <div className="mx-auto max-w-4xl space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Volunteer Signup</h1>
-          <p className="text-sm text-muted-foreground md:text-base">
-            Join upcoming cleanups, race day crews, and logistics teams.
-          </p>
+    <main className="px-6 py-12 md:py-20">
+      <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <div className="space-y-8">
+          <div className="space-y-3">
+            <Eyebrow>Volunteers</Eyebrow>
+            <h1 className="font-display text-h1 text-foreground md:text-display-lg">The event only feels premium when the operations crew is treated like part of the story.</h1>
+            <p className="max-w-2xl text-base leading-8 text-muted-foreground">
+              Join cleanup shifts, check-in teams, route support, and photo crews for upcoming EcoStride weekends.
+            </p>
+          </div>
+
+          <div className="editorial-placeholder relative min-h-[420px] overflow-hidden">
+            <div className="grain-overlay" />
+            <div className="absolute inset-x-0 bottom-0 bg-forest-900/78 p-6 text-white">
+              <p className="font-display text-2xl">A volunteer holding the line matters as much as a runner crossing it.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            {["Check-in", "Route support", "Cleanup crew"].map((item) => (
+              <div key={item} className="space-y-2 border-t border-sand-200 pt-4">
+                <h2 className="font-display text-h3 text-foreground">{item}</h2>
+                <p className="text-sm leading-7 text-muted-foreground">Short, clear roles for people who want to help without chasing logistics.</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm space-y-4"
+          className="space-y-4 border border-sand-200 bg-sand-50 p-6 lg:self-start"
         >
+          <div className="space-y-2">
+            <Eyebrow>Application</Eyebrow>
+            <p className="text-sm leading-7 text-muted-foreground">Tell the team where you can help and which event you care about most.</p>
+          </div>
           <input
             placeholder="Name"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
             {...form.register("name")}
           />
           <input
             placeholder="Email"
             type="email"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
             {...form.register("email")}
           />
           <input
             placeholder="Phone (optional)"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
             {...form.register("phone")}
           />
           <select
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-full border border-sand-300 bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
             {...form.register("eventSlug")}
           >
             <option value="">Any event</option>
@@ -99,7 +123,7 @@ export default function Page() {
             ))}
           </select>
           <div className="space-y-2 text-sm text-foreground">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Areas of interest</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-tide-600">Areas of interest</p>
             {["Check-in", "Water points", "Route marshal", "Cleanup crew", "Media"].map((role) => (
               <label key={role} className="flex items-center gap-2">
                 <input type="checkbox" value={role} {...form.register("roles")} />
@@ -109,17 +133,17 @@ export default function Page() {
           </div>
           <textarea
             placeholder="Notes"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-            rows={3}
+            className="w-full rounded-[1.25rem] border border-sand-300 bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sand-400/35"
+            rows={4}
             {...form.register("notes")}
           />
           {error && <p className="text-sm text-destructive">{error}</p>}
           {status && <p className="text-sm text-emerald-700">{status}</p>}
           <button
             type="submit"
-            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+            className="button-lift rounded-full bg-sand-300 px-5 py-3 text-sm font-semibold text-forest-900 transition hover:bg-sand-200"
           >
-            Submit
+            Apply to volunteer
           </button>
         </form>
       </div>

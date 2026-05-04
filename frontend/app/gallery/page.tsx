@@ -1,4 +1,8 @@
+import Image from "next/image"
 import Link from "next/link"
+import { Eyebrow } from "../../components/eyebrow"
+import { Reveal } from "../../components/reveal"
+import { Section } from "../../components/section"
 import { serverGet } from "../../lib/api-server"
 
 type Album = {
@@ -6,6 +10,18 @@ type Album = {
   title: string
   description: string
   url_slug: string
+}
+
+type AlbumDetailResponse = {
+  album: {
+    title: string
+    description: string
+    url_slug: string
+  }
+  media: Array<{
+    url: string
+    alt_text?: string
+  }>
 }
 
 export default async function Page() {
@@ -16,32 +32,65 @@ export default async function Page() {
     albums = []
   }
 
-  return (
-    <main className="px-6 py-12 md:py-16">
-      <div className="mx-auto max-w-5xl space-y-10">
-        <div className="space-y-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Gallery</h1>
-          <p className="text-sm text-muted-foreground md:text-base">Highlights from past events.</p>
-        </div>
+  const previews = await Promise.all(
+    albums.map(async (album) => {
+      const detail = await serverGet<AlbumDetailResponse>(`/public/gallery/albums/${album.url_slug}`, {
+        next: { revalidate: 60 }
+      }).catch(() => null)
 
-        <div className="grid gap-5 md:grid-cols-2">
-          {albums.map((album) => (
-            <Link
-              key={album.slug}
-              href={`/gallery/${album.url_slug}`}
-              className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-            >
-              <h2 className="text-xl font-semibold text-foreground">{album.title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{album.description}</p>
-            </Link>
-          ))}
-          {albums.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-              No albums yet.
-            </div>
-          )}
-        </div>
-      </div>
+      return {
+        ...album,
+        media: detail?.media?.slice(0, 4) ?? []
+      }
+    })
+  )
+
+  return (
+    <main>
+      <Section>
+        <Reveal className="space-y-12">
+          <div className="max-w-2xl space-y-3">
+            <Eyebrow>Gallery</Eyebrow>
+            <h1 className="font-display text-h1 text-foreground md:text-display-lg">Albums from race days, cleanup crews, and the coastline in motion.</h1>
+          </div>
+
+          <div className="grid gap-10 md:grid-cols-2">
+            {previews.map((album) => (
+              <Link key={album.slug} href={`/gallery/${album.url_slug}`} className="group block space-y-4">
+                <div className="relative aspect-[4/3] overflow-hidden bg-sand-100">
+                  <div className="grid h-full grid-cols-2 grid-rows-2 gap-[1px] bg-sand-200">
+                    {Array.from({ length: 4 }).map((_, index) => {
+                      const item = album.media[index]
+                      if (item?.url) {
+                        return (
+                          <div key={item.url} className="relative min-h-0 min-w-0 overflow-hidden bg-sand-100">
+                            <Image
+                              src={item.url}
+                              alt={item.alt_text || album.title}
+                              fill
+                              className="editorial-image object-cover transition duration-500 group-hover:scale-[1.03]"
+                            />
+                          </div>
+                        )
+                      }
+
+                      return <div key={`${album.slug}-${index}`} className="editorial-placeholder" />
+                    })}
+                  </div>
+                  <div className="absolute inset-x-0 bottom-0 bg-forest-900/85 p-4 transition group-hover:bg-forest-900/92">
+                    <h2 className="font-display text-h3 text-white">{album.title}</h2>
+                  </div>
+                </div>
+                <p className="max-w-xl text-sm leading-7 text-muted-foreground">{album.description}</p>
+              </Link>
+            ))}
+
+            {previews.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No albums yet. The first one will appear here when media is published.</p>
+            ) : null}
+          </div>
+        </Reveal>
+      </Section>
     </main>
   )
 }

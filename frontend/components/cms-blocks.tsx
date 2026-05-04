@@ -45,9 +45,16 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
         switch (block.type) {
           case "heading":
             return (
-              <h2 key={key} className="text-2xl font-semibold text-foreground">
+              <h2 key={key} className="font-display text-h2 text-foreground md:text-h1">
                 {text || "Heading"}
               </h2>
+            )
+          case "quote":
+          case "pullquote":
+            return (
+              <blockquote key={key} className="border-l-4 border-forest-500 pl-6 font-display text-2xl italic leading-relaxed text-forest-700">
+                {text || "Quoted text"}
+              </blockquote>
             )
           case "image":
             if (!imageURL) {
@@ -59,7 +66,7 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
                 <img
                   src={imageURL}
                   alt={alt}
-                  className="w-full rounded-2xl border border-border/60 bg-muted object-cover"
+                  className="editorial-image w-full bg-muted object-cover"
                   loading="lazy"
                 />
                 {caption && <figcaption className="text-xs text-muted-foreground">{caption}</figcaption>}
@@ -77,7 +84,7 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
               return (
                 <div
                   key={key}
-                  className="prose prose-slate max-w-none text-sm leading-relaxed"
+                  className="prose prose-slate max-w-none text-lg leading-relaxed prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground/85 prose-strong:text-foreground prose-blockquote:border-forest-500 prose-blockquote:font-display prose-blockquote:text-xl prose-blockquote:italic prose-a:text-tide-600"
                   dangerouslySetInnerHTML={{ __html: data.html }}
                 />
               )
@@ -86,19 +93,19 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
               return (
                 <div
                   key={key}
-                  className="prose prose-slate max-w-none text-sm leading-relaxed"
+                  className="prose prose-slate max-w-none text-lg leading-relaxed prose-headings:font-display prose-headings:text-foreground prose-p:text-foreground/85 prose-strong:text-foreground prose-blockquote:border-forest-500 prose-blockquote:font-display prose-blockquote:text-xl prose-blockquote:italic prose-a:text-tide-600"
                   dangerouslySetInnerHTML={{ __html: text }}
                 />
               )
             }
             return (
-              <p key={key} className="text-sm leading-relaxed text-muted-foreground">
+              <p key={key} className="text-lg leading-relaxed text-foreground/85">
                 {text || "Content block"}
               </p>
             )
           default:
             return (
-              <div key={key} className="rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+              <div key={key} className="border-l-2 border-sand-200 pl-4 text-base text-muted-foreground">
                 {text || "Content block"}
               </div>
             )

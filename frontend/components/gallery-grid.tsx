@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react"
+import { CopyLinkButton } from "./copy-link-button"
 
 export type GalleryItem = {
   url: string
@@ -53,7 +54,6 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
 
   return (
     <>
-      {/* Masonry-style: items keep their natural aspect ratio, no forced cropping. */}
       <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
         {items.map((item, idx) => {
           const video = isVideo(item)
@@ -62,12 +62,12 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
               key={`${item.url}-${idx}`}
               type="button"
               onClick={() => setOpenIndex(idx)}
-              className="mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl border border-border bg-card p-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-forest"
+              className="mb-4 block w-full break-inside-avoid overflow-hidden border border-sand-200 bg-background p-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-forest"
             >
               {video ? (
                 <video
                   src={item.url}
-                  className="block h-auto w-full rounded-xl"
+                  className="block h-auto w-full"
                   muted
                   playsInline
                   preload="metadata"
@@ -77,11 +77,11 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
                 <img
                   src={item.url}
                   alt={item.alt_text || fallbackAlt}
-                  className="block h-auto w-full rounded-xl"
+                  className="editorial-image block h-auto w-full"
                   loading="lazy"
                 />
               ) : (
-                <div className="flex h-40 items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
+                <div className="flex h-40 items-center justify-center bg-muted text-sm text-muted-foreground">
                   Media unavailable
                 </div>
               )}
@@ -100,14 +100,31 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
             if (e.target === e.currentTarget) close()
           }}
         >
-          <button
-            type="button"
-            onClick={close}
-            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-            aria-label="Close"
-          >
-            <X className="h-6 w-6" />
-          </button>
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <a
+              href={items[openIndex].url}
+              download
+              target="_blank"
+              rel="noreferrer"
+              className="button-lift inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </a>
+            <CopyLinkButton
+              value={`${window.location.origin}${window.location.pathname}#media-${openIndex + 1}`}
+              label="Share"
+              className="border-white/15 bg-white/10 text-white hover:bg-white/20"
+            />
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+              aria-label="Close"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
           {items.length > 1 && (
             <>
               <button
@@ -156,6 +173,9 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
             {items[openIndex].alt_text && (
               <p className="text-center text-sm text-white/85">{items[openIndex].alt_text}</p>
             )}
+            <p className="text-xs tracking-[0.16em] text-white/60">
+              ← → Esc
+            </p>
             <p className="text-xs text-white/60">
               {openIndex + 1} / {items.length}
             </p>

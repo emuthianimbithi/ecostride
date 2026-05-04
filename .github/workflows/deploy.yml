@@ -1,0 +1,32 @@
+name: Deploy to DO droplet
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-droplet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and redeploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_PORT || 22 }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            cd /opt/ecostride
+            git fetch --all --prune
+            git reset --hard origin/${{ github.ref_name }}
+            docker compose pull || true
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
+            docker compose ps

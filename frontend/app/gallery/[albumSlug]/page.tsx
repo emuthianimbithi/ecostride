@@ -1,6 +1,10 @@
 import Link from "next/link"
-import { serverGet } from "../../../lib/api-server"
+import { CopyLinkButton } from "../../../components/copy-link-button"
+import { Eyebrow } from "../../../components/eyebrow"
 import { GalleryGrid, type GalleryItem } from "../../../components/gallery-grid"
+import { Reveal } from "../../../components/reveal"
+import { Section } from "../../../components/section"
+import { serverGet } from "../../../lib/api-server"
 
 type Album = {
   title: string
@@ -32,18 +36,29 @@ export default async function Page({ params }: PageProps) {
     })
 
     return (
-      <main className="px-6 py-12 md:py-16">
-        <div className="mx-auto max-w-6xl space-y-8">
-          <div className="space-y-2">
-            <Link className="text-xs uppercase tracking-[0.2em] text-muted-foreground" href="/gallery">
-              Back to gallery
-            </Link>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{data.album.title}</h1>
-            <p className="text-sm text-muted-foreground md:text-base">{data.album.description}</p>
-          </div>
+      <main>
+        <Section>
+          <Reveal className="space-y-10">
+            <div className="mx-auto max-w-5xl space-y-4">
+              <Link className="link-underline text-xs uppercase tracking-[0.24em] text-tide-600" href="/gallery">
+                Back to gallery
+              </Link>
+              <Eyebrow>Gallery album</Eyebrow>
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div className="max-w-3xl space-y-3">
+                  <h1 className="font-display text-h1 text-foreground md:text-display-lg">{data.album.title}</h1>
+                  <p className="text-base leading-8 text-muted-foreground">{data.album.description}</p>
+                </div>
+                <CopyLinkButton value={`/gallery/${data.album.url_slug}`} />
+              </div>
+            </div>
 
-          <GalleryGrid items={data.media} fallbackAlt={data.album.title} />
-        </div>
+            <div className="mx-auto max-w-6xl space-y-4">
+              <p className="text-xs tracking-[0.16em] text-muted-foreground">LIGHTBOX: ← → Esc</p>
+              <GalleryGrid items={data.media} fallbackAlt={data.album.title} />
+            </div>
+          </Reveal>
+        </Section>
       </main>
     )
   } catch (err) {
@@ -51,7 +66,7 @@ export default async function Page({ params }: PageProps) {
     return (
       <main className="px-6 py-12 md:py-16">
         <div className="mx-auto max-w-4xl space-y-4">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Album not found</h1>
+          <h1 className="font-display text-h1 text-foreground">Album not found</h1>
           <p className="text-sm text-muted-foreground">We could not load this gallery album.</p>
         </div>
       </main>
