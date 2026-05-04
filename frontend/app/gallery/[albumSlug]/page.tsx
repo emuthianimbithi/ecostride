@@ -1,6 +1,6 @@
-import Image from "next/image"
 import Link from "next/link"
 import { serverGet } from "../../../lib/api-server"
+import { GalleryGrid, type GalleryItem } from "../../../components/gallery-grid"
 
 type Album = {
   title: string
@@ -8,13 +8,9 @@ type Album = {
   url_slug: string
 }
 
-type MediaItem = {
+type MediaItem = GalleryItem & {
   sort_order: number
-  url: string
   path: string
-  mime: string
-  alt_text: string
-  type: string
 }
 
 type AlbumResponse = {
@@ -27,7 +23,6 @@ type PageProps = {
 }
 
 export default async function Page({ params }: PageProps) {
-  // Next.js 15+: params is a Promise, unwrap it
   const { albumSlug } = await params
 
   try {
@@ -47,31 +42,7 @@ export default async function Page({ params }: PageProps) {
             <p className="text-sm text-muted-foreground md:text-base">{data.album.description}</p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.media.map((item, index) => (
-              <div key={`${item.url}-${index}`} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
-                {item.url ? (
-                  <Image
-                    src={item.url}
-                    alt={item.alt_text || data.album.title}
-                    width={800}
-                    height={600}
-                    className="h-56 w-full rounded-xl object-cover"
-                  />
-                ) : (
-                  <div className="flex h-56 items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
-                    Media unavailable
-                  </div>
-                )}
-                {item.alt_text && <p className="mt-2 text-xs text-muted-foreground">{item.alt_text}</p>}
-              </div>
-            ))}
-            {data.media.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-border bg-card/60 p-6 text-sm text-muted-foreground">
-                No photos uploaded yet.
-              </div>
-            )}
-          </div>
+          <GalleryGrid items={data.media} fallbackAlt={data.album.title} />
         </div>
       </main>
     )
