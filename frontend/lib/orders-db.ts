@@ -17,8 +17,8 @@ export type LocalOrder = {
     updated_at?: string
 }
 
-const DB_NAME = "ecostride"
-const DB_VERSION = 2
+const DB_NAME = "ecostride-orders"
+const DB_VERSION = 1
 
 const STORE_ORDERS = "orders"
 

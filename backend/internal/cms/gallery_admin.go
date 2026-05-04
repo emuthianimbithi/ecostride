@@ -290,7 +290,9 @@ func (h *Handler) SetAlbumMedia(c *gin.Context) {
 	}
 
 	tx := h.Service.DB.WithContext(c.Request.Context()).Begin()
-	if err := tx.Where("album_id = ?", album.ID).Delete(&models.AlbumMedia{}).Error; err != nil {
+	// Hard-delete: gorm soft-deletes by default, but the unique index on (album_id, media_id)
+	// still sees soft-deleted rows, which causes a constraint violation on re-insert.
+	if err := tx.Unscoped().Where("album_id = ?", album.ID).Delete(&models.AlbumMedia{}).Error; err != nil {
 		tx.Rollback()
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to clear album media", nil)
 		return
