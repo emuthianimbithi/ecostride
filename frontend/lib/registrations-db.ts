@@ -14,7 +14,7 @@ export type StoredRegistration = {
     last_seen_at: string
 }
 
-const DB_NAME = "ecostride"
+const DB_NAME = "ecostride-registrations"
 const DB_VERSION = 1
 const STORE = "registrations"
 
