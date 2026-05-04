@@ -19,15 +19,6 @@ type MediaItem = {
   created_at: string
 }
 
-type AssetMeta = {
-  media_slug: string
-  event_slug: string
-  post_slug: string
-  gallery_slug: string
-}
-
-const metaStorageKey = "admin_media_assignments"
-
 export default function MediaLibraryPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -37,7 +28,6 @@ export default function MediaLibraryPage() {
   const [altPrefix, setAltPrefix] = useState("")
   const [saving, setSaving] = useState(false)
   const [progressLabel, setProgressLabel] = useState<string | null>(null)
-  const [assignments, setAssignments] = useState<Record<string, AssetMeta>>({})
 
   const loadMedia = async () => {
     setLoading(true)
@@ -54,13 +44,6 @@ export default function MediaLibraryPage() {
 
   useEffect(() => {
     void loadMedia()
-    try {
-      const raw = localStorage.getItem(metaStorageKey)
-      const parsed = raw ? (JSON.parse(raw) as Record<string, AssetMeta>) : {}
-      setAssignments(parsed || {})
-    } catch {
-      setAssignments({})
-    }
   }, [])
 
   const onDropFiles = (incoming: FileList | null) => {
@@ -115,26 +98,6 @@ export default function MediaLibraryPage() {
     }
   }
 
-  const updateMeta = (slug: string, patch: Partial<AssetMeta>) => {
-    setAssignments((prev) => {
-      const next: Record<string, AssetMeta> = {
-        ...prev,
-        [slug]: {
-          media_slug: slug,
-          event_slug: prev[slug]?.event_slug ?? "",
-          post_slug: prev[slug]?.post_slug ?? "",
-          gallery_slug: prev[slug]?.gallery_slug ?? "",
-          ...patch
-        }
-      }
-      try {
-        localStorage.setItem(metaStorageKey, JSON.stringify(next))
-      } catch {
-        // ignore
-      }
-      return next
-    })
-  }
 
   const queueSummary = useMemo(() => {
     if (files.length === 0) return "No pending uploads."
@@ -201,7 +164,6 @@ export default function MediaLibraryPage() {
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">URL / Path</th>
                 <th className="px-3 py-2">Alt text</th>
-                <th className="px-3 py-2">Attach To</th>
               </tr>
             </thead>
             <tbody>
@@ -210,28 +172,6 @@ export default function MediaLibraryPage() {
                   <td className="px-3 py-2 text-slate-600">{item.type}</td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.url || item.path || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{item.alt_text || "-"}</td>
-                  <td className="px-3 py-2">
-                    <div className="grid gap-2 md:grid-cols-3">
-                      <input
-                        value={assignments[item.slug]?.event_slug ?? ""}
-                        onChange={(e) => updateMeta(item.slug, { event_slug: e.target.value })}
-                        placeholder="event slug"
-                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                      />
-                      <input
-                        value={assignments[item.slug]?.post_slug ?? ""}
-                        onChange={(e) => updateMeta(item.slug, { post_slug: e.target.value })}
-                        placeholder="post slug"
-                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                      />
-                      <input
-                        value={assignments[item.slug]?.gallery_slug ?? ""}
-                        onChange={(e) => updateMeta(item.slug, { gallery_slug: e.target.value })}
-                        placeholder="gallery slug"
-                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                      />
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>

@@ -485,8 +485,8 @@ export default function Page() {
 
     const selected_hero_style = useMemo(() => {
         const picked = form.hero_style_id.trim()
-        if (picked) return hero_styles.find((h) => h.ID === picked) ?? null
-        if (default_hero_style_id) return hero_styles.find((h) => h.ID === default_hero_style_id) ?? null
+        if (picked) return hero_styles.find((h) => h.id === picked) ?? null
+        if (default_hero_style_id) return hero_styles.find((h) => h.id === default_hero_style_id) ?? null
         return null
     }, [form.hero_style_id, hero_styles, default_hero_style_id])
 
@@ -590,8 +590,8 @@ export default function Page() {
                     >
                         <option value="">Hero style: default</option>
                         {hero_styles.map((style, idx) => (
-                            <option key={`${style.ID}-${idx}`} value={style.ID}>
-                                {style.Name} ({style.Key})
+                            <option key={`${style.id}-${idx}`} value={style.id}>
+                                {style.name} ({style.key})
                             </option>
                         ))}
                     </select>

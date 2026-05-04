@@ -20,6 +20,8 @@ export const adminNavGroups: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { label: "Site Pages", href: "/admin/cms/pages", permission: "cms.page.read" },
       { label: "Blog & Media", href: "/admin/cms/posts", permission: "cms.post.read" },
+      { label: "Media Library", href: "/admin/cms/media", permission: "cms.media.read" },
+      { label: "Gallery Albums", href: "/admin/cms/gallery", permission: "cms.media.read" },
       { label: "Hero Styles", href: "/admin/cms/hero-styles", permission: "cms.herostyle.read" }
     ]
   },

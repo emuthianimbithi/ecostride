@@ -24,9 +24,9 @@ function HeroMedia({ url, alt, pos }: { url: string; alt: string; pos: string })
 }
 
 type Overlay = {
-  Enabled?: boolean
-  Type?: "gradient" | "solid"
-  Opacity?: number
+  enabled?: boolean
+  type?: "gradient" | "solid"
+  opacity?: number
 }
 
 type FocalPoint = {
@@ -35,17 +35,18 @@ type FocalPoint = {
 }
 
 export type HeroStyle = {
-  ID: string
-  Name: string
-  Key: string
-  Description: string
-  LayoutType: string
-  AspectRatio: string
-  Overlay?: Overlay | null
-  FocalPoint?: FocalPoint | null
-  TextPlacement?: "LEFT" | "CENTER" | "RIGHT" | string
-  PaddingVariant?: "NONE" | "SM" | "MD" | "LG" | string
-  IsActive: boolean
+  id: string
+  slug?: string
+  name: string
+  key: string
+  description?: string
+  layout_type: string
+  aspect_ratio: string
+  overlay?: Overlay | null
+  focal_point?: FocalPoint | null
+  text_placement?: "LEFT" | "CENTER" | "RIGHT" | string
+  padding_variant?: "NONE" | "SM" | "MD" | "LG" | string
+  is_active: boolean
 }
 
 function aspectClass(aspectRatio: string | undefined) {
@@ -95,10 +96,10 @@ export function BlogHero(props: {
 }) {
   const { imageUrl, title, excerpt, showTitle = true, heroStyle } = props
 
-  const layoutType = (heroStyle?.LayoutType ?? "FULL_BLEED").toUpperCase()
-  const overlay = heroStyle?.Overlay ?? undefined
-  const pos = objectPosition(heroStyle?.FocalPoint ?? undefined)
-  const aspect = aspectClass(heroStyle?.AspectRatio)
+  const layoutType = (heroStyle?.layout_type ?? "FULL_BLEED").toUpperCase()
+  const overlay = heroStyle?.overlay ?? undefined
+  const pos = objectPosition(heroStyle?.focal_point ?? undefined)
+  const aspect = aspectClass(heroStyle?.aspect_ratio)
 
   if (layoutType === "SPLIT_LEFT") {
     return (
@@ -132,17 +133,17 @@ export function BlogHero(props: {
     )
   }
 
-  const hasOverlay = !!overlay?.Enabled
-  const overlayOpacity = typeof overlay?.Opacity === "number" ? overlay.Opacity : 0.45
-  const placement = textAlignClass(heroStyle?.TextPlacement)
-  const pad = paddingClass(heroStyle?.PaddingVariant)
+  const hasOverlay = !!overlay?.enabled
+  const overlayOpacity = typeof overlay?.opacity === "number" ? overlay.opacity : 0.45
+  const placement = textAlignClass(heroStyle?.text_placement)
+  const pad = paddingClass(heroStyle?.padding_variant)
 
   return (
     <section className="mx-auto max-w-5xl">
       <div className={`relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm ${aspect}`}>
         <HeroMedia url={imageUrl} alt={title} pos={pos} />
         {hasOverlay ? (
-          overlay?.Type === "solid" ? (
+          overlay?.type === "solid" ? (
             <div className="absolute inset-0 bg-black" style={{ opacity: overlayOpacity }} />
           ) : (
             <div

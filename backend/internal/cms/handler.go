@@ -77,6 +77,43 @@ type heroStyleRequest struct {
 	IsActive       *bool           `json:"is_active"`
 }
 
+type heroStyleListItem struct {
+	ID             string          `json:"id"`
+	Slug           string          `json:"slug"`
+	Name           string          `json:"name"`
+	Key            string          `json:"key"`
+	Description    string          `json:"description"`
+	LayoutType     string          `json:"layout_type"`
+	AspectRatio    string          `json:"aspect_ratio"`
+	Overlay        json.RawMessage `json:"overlay"`
+	FocalPoint     json.RawMessage `json:"focal_point"`
+	TextPlacement  string          `json:"text_placement"`
+	PaddingVariant string          `json:"padding_variant"`
+	IsActive       bool            `json:"is_active"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+func toHeroStyleListItem(s models.HeroStyle) heroStyleListItem {
+	slug := s.Slug.String()
+	return heroStyleListItem{
+		ID:             slug,
+		Slug:           slug,
+		Name:           s.Name,
+		Key:            s.Key,
+		Description:    s.Description,
+		LayoutType:     s.LayoutType,
+		AspectRatio:    s.AspectRatio,
+		Overlay:        json.RawMessage(s.Overlay),
+		FocalPoint:     json.RawMessage(s.FocalPoint),
+		TextPlacement:  s.TextPlacement,
+		PaddingVariant: s.PaddingVariant,
+		IsActive:       s.IsActive,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+	}
+}
+
 type defaultHeroStyleRequest struct {
 	HeroStyleID string `json:"hero_style_id" binding:"required"`
 }
@@ -496,7 +533,11 @@ func (h *Handler) ListHeroStyles(c *gin.Context) {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to list hero styles", nil)
 		return
 	}
-	c.JSON(http.StatusOK, styles)
+	out := make([]heroStyleListItem, 0, len(styles))
+	for _, s := range styles {
+		out = append(out, toHeroStyleListItem(s))
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 func (h *Handler) CreateHeroStyle(c *gin.Context) {
@@ -531,7 +572,7 @@ func (h *Handler) CreateHeroStyle(c *gin.Context) {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create hero style", nil)
 		return
 	}
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, toHeroStyleListItem(created))
 }
 
 func (h *Handler) UpdateHeroStyle(c *gin.Context) {
@@ -574,7 +615,7 @@ func (h *Handler) UpdateHeroStyle(c *gin.Context) {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to update hero style", nil)
 		return
 	}
-	c.JSON(http.StatusOK, updated)
+	c.JSON(http.StatusOK, toHeroStyleListItem(updated))
 }
 
 func (h *Handler) DisableHeroStyle(c *gin.Context) {
@@ -595,7 +636,7 @@ func (h *Handler) DisableHeroStyle(c *gin.Context) {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to disable hero style", nil)
 		return
 	}
-	c.JSON(http.StatusOK, updated)
+	c.JSON(http.StatusOK, toHeroStyleListItem(updated))
 }
 
 func (h *Handler) GetDefaultHeroStyle(c *gin.Context) {
