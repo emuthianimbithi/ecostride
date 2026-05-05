@@ -25,6 +25,7 @@ func EventFromModel(m models.Event) Event {
 		RegOpenAt:   m.RegOpenAt,
 		RegCloseAt:  m.RegCloseAt,
 		Status:      m.Status,
+		IsFeatured:  m.IsFeatured,
 		HeroMediaID: m.HeroMediaID,
 		SEOTitle:    m.SEOTitle,
 		SEODesc:     m.SEODesc,

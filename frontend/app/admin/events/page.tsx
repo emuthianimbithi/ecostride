@@ -15,6 +15,7 @@ type Event = {
     type: string
     status: string
     start_at: string
+    is_featured?: boolean
 }
 
 type AuditLog = {
@@ -160,6 +161,9 @@ export default function EventsPage() {
         slug: "",
         type: "MARATHON",
         title: "",
+        is_featured: false,
+        repeat_mode: "none",
+        repeat_count: "1",
         narrative: {
             summary: "",
             course_headline: "",
@@ -272,6 +276,12 @@ export default function EventsPage() {
         if (!form.slug.trim()) next.slug = "URL slug is required."
         if (!form.title.trim()) next.title = "Title is required."
         if (!form.start_at) next.start_at = "Start date/time is required."
+        if (form.repeat_mode !== "none") {
+            const repeatCount = Number(form.repeat_count)
+            if (!Number.isFinite(repeatCount) || repeatCount < 2) {
+                next.repeat_count = "Repeat count must be at least 2 when recurrence is enabled."
+            }
+        }
 
         if (form.reg_open_at && form.reg_close_at) {
             const open = new Date(form.reg_open_at).getTime()
@@ -299,6 +309,9 @@ export default function EventsPage() {
                 url_slug: form.slug.trim(),
                 type: form.type,
                 title: form.title.trim(),
+                is_featured: form.is_featured,
+                repeat_mode: form.repeat_mode,
+                repeat_count: Number(form.repeat_count) || 1,
                 description: buildStructuredDescription(form.narrative, media),
                 location: form.location,
                 map_url: form.map_url,
@@ -314,6 +327,9 @@ export default function EventsPage() {
                 slug: "",
                 type: "MARATHON",
                 title: "",
+                is_featured: false,
+                repeat_mode: "none",
+                repeat_count: "1",
                 narrative: {
                     summary: "",
                     course_headline: "",
@@ -454,6 +470,15 @@ export default function EventsPage() {
                             <option value="archived">Archived</option>
                         </select>
 
+                        <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={form.is_featured}
+                                onChange={(e) => setForm({ ...form, is_featured: e.target.checked })}
+                            />
+                            Spotlight this as the main event
+                        </label>
+
                         <input
                             value={form.location}
                             onChange={(e) => setForm({ ...form, location: e.target.value })}
@@ -522,6 +547,34 @@ export default function EventsPage() {
                                 />
                             </label>
                             {errors.reg_close_at ? <p className="text-xs text-rose-600">{errors.reg_close_at}</p> : null}
+                        </div>
+
+                        <select
+                            value={form.repeat_mode}
+                            onChange={(e) => {
+                                setForm({ ...form, repeat_mode: e.target.value })
+                                if (errors.repeat_count) setFieldError("repeat_count", undefined)
+                            }}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        >
+                            <option value="none">One-time event</option>
+                            <option value="monthly">Repeat monthly</option>
+                            <option value="yearly">Repeat yearly</option>
+                        </select>
+
+                        <div className="space-y-1">
+                            <input
+                                type="number"
+                                min={form.repeat_mode === "none" ? 1 : 2}
+                                value={form.repeat_count}
+                                onChange={(e) => {
+                                    setForm({ ...form, repeat_count: e.target.value })
+                                    if (errors.repeat_count) setFieldError("repeat_count", undefined)
+                                }}
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Occurrences"
+                            />
+                            {errors.repeat_count ? <p className="text-xs text-rose-600">{errors.repeat_count}</p> : null}
                         </div>
                     </div>
 
@@ -753,6 +806,9 @@ export default function EventsPage() {
                                         slug: "",
                                         type: "MARATHON",
                                         title: "",
+                                        is_featured: false,
+                                        repeat_mode: "none",
+                                        repeat_count: "1",
                                         narrative: {
                                             summary: "",
                                             course_headline: "",
@@ -808,7 +864,16 @@ export default function EventsPage() {
                     <tbody>
                     {events.map((event) => (
                         <tr key={event.slug} className="border-t border-slate-100">
-                            <td className="px-4 py-3 font-medium text-slate-800">{event.title}</td>
+                            <td className="px-4 py-3 font-medium text-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span>{event.title}</span>
+                                    {event.is_featured ? (
+                                        <span className="rounded-full bg-sand-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-forest-900">
+                                            Main event
+                                        </span>
+                                    ) : null}
+                                </div>
+                            </td>
                             <td className="px-4 py-3 text-slate-600">{event.type}</td>
                             <td className="px-4 py-3 text-slate-600">
                                 <div>{event.status}</div>

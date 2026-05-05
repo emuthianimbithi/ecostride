@@ -67,6 +67,7 @@ type Event struct {
 	RegOpenAt   *time.Time `json:"reg_open_at,omitempty"`
 	RegCloseAt  *time.Time `json:"reg_close_at,omitempty"`
 	Status      string     `json:"status"`
+	IsFeatured  bool       `json:"is_featured"`
 	HeroMediaID *uint      `json:"hero_media_id,omitempty"`
 	SEOTitle    string     `json:"seo_title,omitempty"`
 	SEODesc     string     `json:"seo_desc,omitempty"`

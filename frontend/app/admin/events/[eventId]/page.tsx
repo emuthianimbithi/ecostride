@@ -12,6 +12,7 @@ type Event = {
     title: string
     type: string
     status: string
+    is_featured?: boolean
     description: string
     location: string
     map_url: string
@@ -217,6 +218,7 @@ export default function EventDetailPage() {
         title: "",
         type: "MARATHON",
         status: "draft",
+        is_featured: false,
         location: "",
         map_url: "",
         start_at: "",
@@ -304,6 +306,7 @@ export default function EventDetailPage() {
             title: event.title,
             type: event.type,
             status: event.status,
+            is_featured: Boolean(event.is_featured),
             location: event.location || "",
             map_url: event.map_url || "",
             start_at: event.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : "",
@@ -422,6 +425,7 @@ export default function EventDetailPage() {
                 title: eventForm.title.trim(),
                 type: eventForm.type,
                 status: eventForm.status,
+                is_featured: eventForm.is_featured,
                 description: buildStructuredDescription(eventForm.narrative, media),
                 location: eventForm.location,
                 map_url: eventForm.map_url,
@@ -627,7 +631,9 @@ export default function EventDetailPage() {
                         {event.type} • {event.location || "Location TBD"} •{" "}
                         {event.start_at ? new Date(event.start_at).toLocaleDateString() : "TBD"}
                     </p>
-                    <p className="text-xs uppercase text-slate-400">Status: {event.status}</p>
+                    <p className="text-xs uppercase text-slate-400">
+                        Status: {event.status}{event.is_featured ? " • Main event" : ""}
+                    </p>
                 </section>
             )}
 
@@ -669,6 +675,14 @@ export default function EventDetailPage() {
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>
                     </select>
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={eventForm.is_featured}
+                            onChange={(e) => setEventForm({ ...eventForm, is_featured: e.target.checked })}
+                        />
+                        Spotlight this as the main event
+                    </label>
                     <input
                         type="datetime-local"
                         value={eventForm.start_at}

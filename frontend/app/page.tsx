@@ -19,6 +19,7 @@ type EventApi = {
   start_at: string
   reg_open_at?: string | null
   reg_close_at?: string | null
+  is_featured?: boolean
 }
 
 type PostApi = {
@@ -100,7 +101,7 @@ export default async function HomePage() {
     .filter((event) => event.start_at)
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
 
-  const featuredEvent = upcomingEvents[0]
+  const featuredEvent = upcomingEvents.find((event) => event.is_featured) ?? upcomingEvents[0]
   const featuredPost = posts[0]
   const secondaryPosts = posts.slice(1, 3)
   const featuredAlbums = albums.slice(0, 3)
