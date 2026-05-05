@@ -122,7 +122,7 @@ export default async function HomePage() {
 
   return (
     <main>
-      <MalindiHero primaryLabel="Join the cleanup" />
+      <MalindiHero primaryLabel="Join the movement" />
 
       <MalindiImpact />
 

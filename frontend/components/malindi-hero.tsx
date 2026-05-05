@@ -46,7 +46,7 @@ const SCENES: Scene[] = [
 const SCENE_DURATION = 6000
 
 export function MalindiHero({
-  primaryLabel = "Join the cleanup"
+  primaryLabel = "Join the movement"
 }: {
   primaryLabel?: string
 }) {
@@ -670,44 +670,8 @@ export function MalindiHero({
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: isLoaded ? 1 : 0, y: isLoaded ? 0 : 30 }}
           transition={{ duration: 1, delay: 2.8 }}
-          className="flex w-full flex-col items-end justify-between gap-8 md:flex-row"
+          className="flex w-full justify-end"
         >
-          <div className="flex gap-4 rounded-full border border-[#F5EBDD]/10 bg-[#081522]/40 p-2 backdrop-blur-md pointer-events-auto">
-            {SCENES.map((scene, i) => (
-              <button
-                key={scene.id}
-                type="button"
-                onClick={() => setActiveScene(i)}
-                className="group relative overflow-hidden rounded-full px-6 py-2 outline-none"
-              >
-                {i === activeScene && (
-                  <motion.div
-                    layoutId="mh-activePill"
-                    className="absolute inset-0 rounded-full bg-[#DCC8A5]"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
-                )}
-                {i === activeScene && (
-                  <motion.div
-                    initial={{ width: "0%" }}
-                    animate={{ width: "100%" }}
-                    transition={{ duration: SCENE_DURATION / 1000, ease: "linear" }}
-                    className="absolute bottom-0 left-0 h-1 rounded-full bg-[#67B4B8] opacity-55"
-                  />
-                )}
-                <span
-                  className={`relative z-10 font-body text-xs font-bold uppercase tracking-widest transition-colors ${
-                    i === activeScene
-                      ? "text-[#081522]"
-                      : "text-[#F5EBDD]/55 group-hover:text-[#F5EBDD]/82"
-                  }`}
-                >
-                  0{i + 1}
-                </span>
-              </button>
-            ))}
-          </div>
-
           <div className="hidden flex-col items-center gap-2 opacity-60 md:flex">
             <span className="font-body text-[10px] uppercase tracking-[0.3em] text-[#F5EBDD]">
               Discover
