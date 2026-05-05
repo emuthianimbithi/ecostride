@@ -1,7 +1,7 @@
-import Image from "next/image"
 import Link from "next/link"
 import { Eyebrow } from "../../components/eyebrow"
 import { Reveal } from "../../components/reveal"
+import { ResponsiveMedia, isVideoMedia } from "../../components/responsive-media"
 import { Section } from "../../components/section"
 import { serverGet } from "../../lib/api-server"
 
@@ -21,6 +21,8 @@ type AlbumDetailResponse = {
   media: Array<{
     url: string
     alt_text?: string
+    mime?: string
+    type?: string
   }>
 }
 
@@ -57,18 +59,28 @@ export default async function Page() {
           <div className="grid gap-10 md:grid-cols-2">
             {previews.map((album) => (
               <Link key={album.slug} href={`/gallery/${album.url_slug}`} className="group block space-y-4">
-                <div className="relative aspect-[4/3] overflow-hidden bg-sand-100">
+                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-sand-100">
                   <div className="grid h-full grid-cols-2 grid-rows-2 gap-[1px] bg-sand-200">
                     {Array.from({ length: 4 }).map((_, index) => {
                       const item = album.media[index]
                       if (item?.url) {
+                        const video = isVideoMedia(item.url, item.mime, item.type)
                         return (
-                          <div key={item.url} className="relative min-h-0 min-w-0 overflow-hidden bg-sand-100">
-                            <Image
+                          <div key={`${item.url}-${index}`} className="relative min-h-0 min-w-0 overflow-hidden bg-sand-100">
+                            <ResponsiveMedia
                               src={item.url}
                               alt={item.alt_text || album.title}
-                              fill
-                              className="editorial-image object-cover transition duration-500 group-hover:scale-[1.03]"
+                              mime={item.mime}
+                              type={item.type}
+                              className="h-full rounded-none"
+                              mediaClassName={video ? "h-full w-full" : "transition duration-500 group-hover:scale-[1.03]"}
+                              fillMode="cover"
+                              controls={false}
+                              videoMode="ambient"
+                              autoPlay={video}
+                              muted={video}
+                              loop={video}
+                              playsInline
                             />
                           </div>
                         )
