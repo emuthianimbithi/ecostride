@@ -1,26 +1,24 @@
-import Image from "next/image"
-
-function isVideoUrl(url: string): boolean {
-  const clean = url.split("?")[0].toLowerCase()
-  return clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".mov") || clean.endsWith(".m4v")
-}
+import { ResponsiveMedia, isVideoMedia } from "./responsive-media"
 
 function HeroMedia({ url, alt, pos }: { url: string; alt: string; pos: string }) {
-  if (isVideoUrl(url)) {
-    return (
-      <video
-        src={url}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ objectPosition: pos }}
-      />
-    )
-  }
-  return <Image src={url} alt={alt} fill className="object-cover" style={{ objectPosition: pos }} />
+  const video = isVideoMedia(url)
+  return (
+    <ResponsiveMedia
+      src={url}
+      alt={alt}
+      className="absolute inset-0 h-full w-full bg-transparent"
+      mediaClassName="h-full w-full"
+      mediaStyle={{ objectPosition: pos }}
+      fillMode={video ? "contain" : "cover"}
+      autoPlay={video}
+      muted={video}
+      loop={video}
+      playsInline
+      controls={video}
+      videoMode={video ? "player" : "ambient"}
+      preload={video ? "auto" : "metadata"}
+    />
+  )
 }
 
 type Overlay = {
@@ -137,12 +135,13 @@ export function BlogHero(props: {
   const overlayOpacity = typeof overlay?.opacity === "number" ? overlay.opacity : 0.45
   const placement = textAlignClass(heroStyle?.text_placement)
   const pad = paddingClass(heroStyle?.padding_variant)
+  const video = isVideoMedia(imageUrl)
 
   return (
     <section className="mx-auto max-w-5xl">
       <div className={`relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm ${aspect}`}>
         <HeroMedia url={imageUrl} alt={title} pos={pos} />
-        {hasOverlay ? (
+        {!video && hasOverlay ? (
           overlay?.type === "solid" ? (
             <div className="absolute inset-0 bg-black" style={{ opacity: overlayOpacity }} />
           ) : (
@@ -152,7 +151,7 @@ export function BlogHero(props: {
             />
           )
         ) : null}
-        {showTitle ? (
+        {showTitle && !video ? (
           <div className={`absolute inset-0 flex flex-col justify-end ${placement} ${pad}`}>
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white drop-shadow md:text-4xl">
               {title}
@@ -161,7 +160,12 @@ export function BlogHero(props: {
           </div>
         ) : null}
       </div>
+      {showTitle && video ? (
+        <div className="mt-5 space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{title}</h1>
+          {excerpt ? <p className="text-sm text-muted-foreground md:text-base">{excerpt}</p> : null}
+        </div>
+      ) : null}
     </section>
   )
 }
-

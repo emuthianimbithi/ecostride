@@ -1,21 +1,15 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, Expand, X } from "lucide-react"
 import { CopyLinkButton } from "./copy-link-button"
+import { ResponsiveMedia, isVideoMedia } from "./responsive-media"
 
 export type GalleryItem = {
   url: string
   alt_text: string
   mime: string
   type?: string
-}
-
-function isVideo(item: GalleryItem): boolean {
-  if (item.type === "video") return true
-  if (item.mime?.startsWith("video/")) return true
-  const lower = item.url.split("?")[0].toLowerCase()
-  return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov") || lower.endsWith(".m4v")
 }
 
 export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fallbackAlt: string }) {
@@ -56,37 +50,58 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
     <>
       <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
         {items.map((item, idx) => {
-          const video = isVideo(item)
+          const video = isVideoMedia(item.url, item.mime, item.type)
+
           return (
-            <button
+            <article
               key={`${item.url}-${idx}`}
-              type="button"
-              onClick={() => setOpenIndex(idx)}
-              className="mb-4 block w-full break-inside-avoid overflow-hidden border border-sand-200 bg-background p-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-forest"
+              id={`media-${idx + 1}`}
+              className="mb-4 break-inside-avoid overflow-hidden border border-sand-200 bg-background p-2 text-left shadow-sm"
             >
               {video ? (
-                <video
-                  src={item.url}
-                  className="block h-auto w-full"
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
-              ) : item.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.url}
-                  alt={item.alt_text || fallbackAlt}
-                  className="editorial-image block h-auto w-full"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-40 items-center justify-center bg-muted text-sm text-muted-foreground">
-                  Media unavailable
+                <div className="space-y-2">
+                  <ResponsiveMedia
+                    src={item.url}
+                    alt={item.alt_text || fallbackAlt}
+                    mime={item.mime}
+                    type={item.type}
+                    fillMode="contain"
+                    controls
+                    preload="metadata"
+                    className="max-h-[32rem] bg-black"
+                    mediaClassName="max-h-[32rem]"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    {item.alt_text ? <p className="text-xs text-muted-foreground">{item.alt_text}</p> : <span />}
+                    <button
+                      type="button"
+                      onClick={() => setOpenIndex(idx)}
+                      className="inline-flex items-center gap-2 rounded-full border border-sand-300 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-sand-50"
+                    >
+                      <Expand className="h-3.5 w-3.5" />
+                      Expand
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(idx)}
+                  className="block w-full text-left transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sand-400"
+                >
+                  <ResponsiveMedia
+                    src={item.url}
+                    alt={item.alt_text || fallbackAlt}
+                    mime={item.mime}
+                    type={item.type}
+                    className="h-auto"
+                    mediaClassName="h-auto"
+                    fillMode="cover"
+                  />
+                  {item.alt_text && <p className="mt-2 text-xs text-muted-foreground">{item.alt_text}</p>}
+                </button>
               )}
-              {item.alt_text && <p className="mt-2 text-xs text-muted-foreground">{item.alt_text}</p>}
-            </button>
+            </article>
           )
         })}
       </div>
@@ -148,13 +163,18 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
           <div className="mx-auto flex max-h-[90vh] w-full max-w-[95vw] flex-col items-center justify-center gap-3 px-12">
             {(() => {
               const item = items[openIndex]
-              const video = isVideo(item)
+              const video = isVideoMedia(item.url, item.mime, item.type)
               if (video) {
                 return (
-                  <video
+                  <ResponsiveMedia
                     key={item.url}
                     src={item.url}
-                    className="max-h-[85vh] w-auto max-w-full rounded-xl"
+                    alt={item.alt_text || fallbackAlt}
+                    mime={item.mime}
+                    type={item.type}
+                    className="max-h-[85vh] max-w-full rounded-xl bg-black"
+                    mediaClassName="max-h-[85vh] rounded-xl"
+                    fillMode="contain"
                     controls
                     autoPlay
                     playsInline
@@ -162,20 +182,21 @@ export function GalleryGrid({ items, fallbackAlt }: { items: GalleryItem[]; fall
                 )
               }
               return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <ResponsiveMedia
                   src={item.url}
                   alt={item.alt_text || fallbackAlt}
-                  className="max-h-[85vh] w-auto max-w-full rounded-xl object-contain"
+                  mime={item.mime}
+                  type={item.type}
+                  className="max-h-[85vh] max-w-full rounded-xl"
+                  mediaClassName="max-h-[85vh] rounded-xl"
+                  fillMode="contain"
                 />
               )
             })()}
             {items[openIndex].alt_text && (
               <p className="text-center text-sm text-white/85">{items[openIndex].alt_text}</p>
             )}
-            <p className="text-xs tracking-[0.16em] text-white/60">
-              ← → Esc
-            </p>
+            <p className="text-xs tracking-[0.16em] text-white/60">← → Esc</p>
             <p className="text-xs text-white/60">
               {openIndex + 1} / {items.length}
             </p>

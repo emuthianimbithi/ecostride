@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, Clock3, MapPin } from "lucide-react"
 import { Eyebrow } from "../../../components/eyebrow"
 import { MobileRegisterBar } from "../../../components/mobile-register-bar"
 import { Reveal } from "../../../components/reveal"
+import { ResponsiveMedia } from "../../../components/responsive-media"
 import { Section } from "../../../components/section"
 import { formatDate, formatDateTime, formatMoney } from "../../../lib/format"
 import { serverGet } from "../../../lib/api-server"
@@ -33,6 +34,84 @@ type CategoryApi = {
 
 type PageProps = {
   params: Promise<{ slug: string }>
+}
+
+type NarrativeFAQ = {
+  question: string
+  answer: string
+}
+
+type EventNarrative = {
+  summary: string
+  courseHeadline?: string
+  courseCopy?: string
+  causeHeadline?: string
+  causeCopy?: string
+  faq?: NarrativeFAQ[]
+  heroMedia?: EventNarrativeMedia
+  courseMedia?: EventNarrativeMedia
+  causeMedia?: EventNarrativeMedia
+}
+
+type EventNarrativeMedia = {
+  url: string
+  mime?: string
+  posterUrl?: string
+  aspectRatio?: string
+  altText?: string
+}
+
+function isNarrativeVideo(media?: EventNarrativeMedia) {
+  return Boolean(media?.url && media?.mime?.toLowerCase().startsWith("video/"))
+}
+
+function parseEventNarrative(raw: string) {
+  const fallback: EventNarrative = { summary: raw || "" }
+  if (!raw) return fallback
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== "object") return fallback
+
+    const faq = Array.isArray(parsed.faq)
+      ? parsed.faq
+          .map((item) => {
+            if (!item || typeof item !== "object") return null
+            const row = item as Record<string, unknown>
+            return typeof row.question === "string" && typeof row.answer === "string"
+              ? { question: row.question, answer: row.answer }
+              : null
+          })
+          .filter((item): item is NarrativeFAQ => item !== null)
+      : undefined
+
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary : raw,
+      courseHeadline: typeof parsed.courseHeadline === "string" ? parsed.courseHeadline : undefined,
+      courseCopy: typeof parsed.courseCopy === "string" ? parsed.courseCopy : undefined,
+      causeHeadline: typeof parsed.causeHeadline === "string" ? parsed.causeHeadline : undefined,
+      causeCopy: typeof parsed.causeCopy === "string" ? parsed.causeCopy : undefined,
+      faq: faq && faq.length > 0 ? faq : undefined,
+      heroMedia: readNarrativeMedia(parsed.heroMedia),
+      courseMedia: readNarrativeMedia(parsed.courseMedia),
+      causeMedia: readNarrativeMedia(parsed.causeMedia),
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function readNarrativeMedia(value: unknown): EventNarrativeMedia | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.url !== "string" || !record.url) return undefined
+  return {
+    url: record.url,
+    mime: typeof record.mime === "string" ? record.mime : undefined,
+    posterUrl: typeof record.posterUrl === "string" ? record.posterUrl : undefined,
+    aspectRatio: typeof record.aspectRatio === "string" ? record.aspectRatio : undefined,
+    altText: typeof record.altText === "string" ? record.altText : undefined,
+  }
 }
 
 function registrationState(regOpenAt?: string | null, regCloseAt?: string | null) {
@@ -178,7 +257,8 @@ export default async function Page({ params }: PageProps) {
     const normalizedSponsors = sponsors.map(normalizeSponsor)
     const state = registrationState(event.reg_open_at, event.reg_close_at)
     const mood = eventMood(event.type)
-    const faq = buildFaq(event, categories)
+    const narrative = parseEventNarrative(event.description)
+    const faq = narrative.faq && narrative.faq.length > 0 ? narrative.faq : buildFaq(event, categories)
     const chips = eventChips(event, categories)
     const inclusionsList = inclusions(event.type)
 
@@ -219,34 +299,52 @@ export default async function Page({ params }: PageProps) {
                     </span>
                   </div>
                   <p className="max-w-2xl text-base leading-8 text-sand-100/88 md:text-lg">
-                    {event.description}
+                    {narrative.summary}
                   </p>
                 </div>
 
-                <div className="border border-white/15 bg-white/8 p-6 backdrop-blur">
-                  <Eyebrow className="text-sand-300">{eventTypeLabel(event.type)}</Eyebrow>
-                  <p className="mt-3 text-sm leading-7 text-sand-100/88">
-                    A conversion-first event page: date, route, pricing, and registration without forcing extra clicks.
-                  </p>
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    {state === "open" ? (
+                <div className="space-y-4">
+                  {narrative.heroMedia?.url ? (
+                    <ResponsiveMedia
+                      src={narrative.heroMedia.url}
+                      alt={narrative.heroMedia.altText || event.title}
+                      mime={narrative.heroMedia.mime}
+                      poster={narrative.heroMedia.posterUrl}
+                      aspectRatio={narrative.heroMedia.aspectRatio || "4:5"}
+                      className="overflow-hidden rounded-2xl border border-white/15 bg-black/20"
+                      mediaClassName="h-full w-full"
+                      fillMode={isNarrativeVideo(narrative.heroMedia) ? "contain" : "cover"}
+                      controls={isNarrativeVideo(narrative.heroMedia)}
+                      videoMode={isNarrativeVideo(narrative.heroMedia) ? "player" : "ambient"}
+                      preload={isNarrativeVideo(narrative.heroMedia) ? "auto" : "metadata"}
+                      playsInline
+                    />
+                  ) : null}
+                  <div className="border border-white/15 bg-white/8 p-6 backdrop-blur">
+                    <Eyebrow className="text-sand-300">{eventTypeLabel(event.type)}</Eyebrow>
+                    <p className="mt-3 text-sm leading-7 text-sand-100/88">
+                      A conversion-first event page: date, route, pricing, and registration without forcing extra clicks.
+                    </p>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      {state === "open" ? (
+                        <Link
+                          href={registerHref}
+                          className="button-lift inline-flex h-11 items-center justify-center rounded-full bg-sand-300 px-5 text-sm font-semibold text-forest-900 hover:bg-sand-200"
+                        >
+                          Register now
+                        </Link>
+                      ) : (
+                        <span className="inline-flex h-11 items-center justify-center rounded-full border border-sand-300/40 px-5 text-sm font-semibold text-sand-100">
+                          {registrationLabel(event.reg_open_at, event.reg_close_at)}
+                        </span>
+                      )}
                       <Link
-                        href={registerHref}
-                        className="button-lift inline-flex h-11 items-center justify-center rounded-full bg-sand-300 px-5 text-sm font-semibold text-forest-900 hover:bg-sand-200"
+                        href="/events"
+                        className="button-lift inline-flex h-11 items-center justify-center rounded-full border border-white/20 px-5 text-sm font-semibold text-white hover:bg-white/10"
                       >
-                        Register now
+                        Browse all events
                       </Link>
-                    ) : (
-                      <span className="inline-flex h-11 items-center justify-center rounded-full border border-sand-300/40 px-5 text-sm font-semibold text-sand-100">
-                        {registrationLabel(event.reg_open_at, event.reg_close_at)}
-                      </span>
-                    )}
-                    <Link
-                      href="/events"
-                      className="button-lift inline-flex h-11 items-center justify-center rounded-full border border-white/20 px-5 text-sm font-semibold text-white hover:bg-white/10"
-                    >
-                      Browse all events
-                    </Link>
+                    </div>
                   </div>
                 </div>
               </Reveal>
@@ -279,10 +377,26 @@ export default async function Page({ params }: PageProps) {
                   <div className="space-y-3">
                     <Eyebrow>{mood.courseTitle}</Eyebrow>
                     <h2 className="font-display text-h1 text-foreground md:text-display-lg">
-                      Built for shoreline conditions, not generic road miles.
+                      {narrative.courseHeadline || "Built for shoreline conditions, not generic road miles."}
                     </h2>
                   </div>
-                  <p className="max-w-3xl text-base leading-8 text-muted-foreground">{mood.courseCopy}</p>
+                  <p className="max-w-3xl text-base leading-8 text-muted-foreground">{narrative.courseCopy || mood.courseCopy}</p>
+                  {narrative.courseMedia?.url ? (
+                    <ResponsiveMedia
+                      src={narrative.courseMedia.url}
+                      alt={narrative.courseMedia.altText || `${event.title} course media`}
+                      mime={narrative.courseMedia.mime}
+                      poster={narrative.courseMedia.posterUrl}
+                      aspectRatio={narrative.courseMedia.aspectRatio || "16:9"}
+                      className="overflow-hidden rounded-2xl border border-sand-200"
+                      mediaClassName="h-full w-full"
+                      fillMode={isNarrativeVideo(narrative.courseMedia) ? "contain" : "cover"}
+                      controls={isNarrativeVideo(narrative.courseMedia)}
+                      videoMode={isNarrativeVideo(narrative.courseMedia) ? "player" : "ambient"}
+                      preload={isNarrativeVideo(narrative.courseMedia) ? "auto" : "metadata"}
+                      playsInline
+                    />
+                  ) : null}
                   <div className="flex flex-wrap gap-3">
                     {chips.map((chip) => (
                       <div key={chip.label} className="rounded-full border border-sand-200 px-4 py-2 text-sm text-foreground">
@@ -420,9 +534,29 @@ export default async function Page({ params }: PageProps) {
             <Reveal className="grid gap-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] md:items-center">
               <div className="space-y-4">
                 <Eyebrow className="text-sand-300">{mood.causeTitle}</Eyebrow>
-                <h2 className="font-display text-h1 text-white md:text-display-lg">A better event page should still point back to the coastline.</h2>
+                <h2 className="font-display text-h1 text-white md:text-display-lg">
+                  {narrative.causeHeadline || "A better event page should still point back to the coastline."}
+                </h2>
               </div>
-              <p className="text-base leading-8 text-sand-100/85">{mood.causeCopy}</p>
+              <div className="space-y-5">
+                <p className="text-base leading-8 text-sand-100/85">{narrative.causeCopy || mood.causeCopy}</p>
+                  {narrative.causeMedia?.url ? (
+                    <ResponsiveMedia
+                      src={narrative.causeMedia.url}
+                      alt={narrative.causeMedia.altText || `${event.title} cause media`}
+                      mime={narrative.causeMedia.mime}
+                      poster={narrative.causeMedia.posterUrl}
+                      aspectRatio={narrative.causeMedia.aspectRatio || "4:3"}
+                      className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                      mediaClassName="h-full w-full"
+                      fillMode={isNarrativeVideo(narrative.causeMedia) ? "contain" : "cover"}
+                      controls={isNarrativeVideo(narrative.causeMedia)}
+                      videoMode={isNarrativeVideo(narrative.causeMedia) ? "player" : "ambient"}
+                      preload={isNarrativeVideo(narrative.causeMedia) ? "auto" : "metadata"}
+                      playsInline
+                    />
+                  ) : null}
+              </div>
             </Reveal>
           </Section>
 

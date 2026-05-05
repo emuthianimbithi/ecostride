@@ -1,4 +1,3 @@
-import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, Clock3 } from "lucide-react"
 import { EditorialCard } from "../components/editorial-card"
@@ -6,6 +5,7 @@ import { Eyebrow } from "../components/eyebrow"
 import { MalindiHero } from "../components/malindi-hero"
 import { MalindiImpact } from "../components/malindi-impact"
 import { Reveal } from "../components/reveal"
+import { ResponsiveMedia, isVideoMedia } from "../components/responsive-media"
 import { Section } from "../components/section"
 import { formatDate } from "../lib/format"
 import { serverGet } from "../lib/api-server"
@@ -104,6 +104,7 @@ export default async function HomePage() {
   const featuredPost = posts[0]
   const secondaryPosts = posts.slice(1, 3)
   const featuredAlbums = albums.slice(0, 3)
+  const featuredPostVideo = featuredPost?.featured_image_url ? isVideoMedia(featuredPost.featured_image_url) : false
 
   const albumPreviews = await Promise.all(
     featuredAlbums.map(async (album) => {
@@ -149,7 +150,7 @@ export default async function HomePage() {
           <div className="flex items-end justify-between gap-4">
             <div className="max-w-2xl space-y-3">
               <Eyebrow>Upcoming events</Eyebrow>
-              <h2 className="font-display text-h1 text-foreground md:text-display-lg">Chronological, coastal, and built to convert fast.</h2>
+              <h2 className="font-display text-h1 text-foreground md:text-display-lg">From estuary accountability to a global start line.</h2>
             </div>
             <Link href="/events" className="link-underline hidden text-sm font-semibold text-tide-600 md:inline-flex">
               View all events
@@ -164,11 +165,11 @@ export default async function HomePage() {
                 <div className="space-y-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-tide-600">{monthDivider(event.start_at)} ↘</p>
                   <div className="relative aspect-[4/5] w-full overflow-hidden bg-sand-100">
-                    <Image
+                    <ResponsiveMedia
                       src="/coastal-course.svg"
                       alt="Generic EcoStride shoreline course illustration"
-                      fill
-                      className="editorial-image object-cover"
+                      className="h-full"
+                      fillMode="cover"
                     />
                   </div>
                 </div>
@@ -211,6 +212,40 @@ export default async function HomePage() {
 
       <Section>
         <Reveal className="space-y-10">
+          <div className="max-w-3xl space-y-3">
+            <Eyebrow>Investors Forum 2026</Eyebrow>
+            <h2 className="font-display text-h1 text-foreground md:text-display-lg">The finish line is not the Marine Park. The finish line is the Circular Economy Hub.</h2>
+            <p className="text-base leading-8 text-muted-foreground">
+              PWAM&apos;s investor agenda and EcoStride&apos;s event platform now point to the same outcome: turning Malindi&apos;s plastic crisis into infrastructure, compliance pathways, and locally anchored green growth.
+            </p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              {
+                title: "Manufacturers",
+                copy: "A visible compliance pathway for Extended Producer Responsibility and material recovery."
+              },
+              {
+                title: "Tourism & Trade",
+                copy: "A cleaner coastline, stronger destination story, and a more credible sustainability proposition."
+              },
+              {
+                title: "Finance & Impact",
+                copy: "A practical green asset story tied to circular infrastructure, enterprise growth, and measurable environmental outcomes."
+              }
+            ].map((item) => (
+              <div key={item.title} className="space-y-3 border-t border-sand-200 pt-4">
+                <Eyebrow>{item.title}</Eyebrow>
+                <h3 className="font-display text-h3 text-foreground">{item.title}</h3>
+                <p className="text-sm leading-7 text-muted-foreground">{item.copy}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </Section>
+
+      <Section>
+        <Reveal className="space-y-10">
           <div className="flex items-end justify-between gap-4">
             <div className="max-w-2xl space-y-3">
               <Eyebrow>Stories</Eyebrow>
@@ -222,32 +257,44 @@ export default async function HomePage() {
           </div>
 
           {featuredPost ? (
-            <Link href={`/blog/${featuredPost.url_slug}`} className="group grid gap-6 md:grid-cols-[1.3fr_minmax(0,1fr)]">
-              <div className="relative aspect-[16/10] overflow-hidden bg-sand-100">
+            <article className="group grid gap-6 md:grid-cols-[1.3fr_minmax(0,1fr)]">
+              <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-sand-100">
                 {featuredPost.featured_image_url ? (
-                  <Image
+                  <ResponsiveMedia
                     src={featuredPost.featured_image_url}
                     alt={featuredPost.title}
-                    fill
-                    className="editorial-image object-cover transition duration-500 group-hover:scale-[1.03]"
+                    className="h-full"
+                    mediaClassName={!featuredPostVideo ? "transition duration-500 group-hover:scale-[1.03]" : "h-full w-full"}
+                    fillMode={featuredPostVideo ? "contain" : "cover"}
+                    controls={featuredPostVideo}
+                    videoMode={featuredPostVideo ? "player" : "ambient"}
+                    preload={featuredPostVideo ? "auto" : "metadata"}
                   />
                 ) : (
-                  <Image
+                  <ResponsiveMedia
                     src="/coastal-race.svg"
                     alt="Generic EcoStride shoreline story illustration"
-                    fill
-                    className="editorial-image object-cover transition duration-500 group-hover:scale-[1.03]"
+                    className="h-full"
+                    mediaClassName="transition duration-500 group-hover:scale-[1.03]"
+                    fillMode="cover"
                   />
                 )}
               </div>
               <div className="flex flex-col justify-center space-y-4">
                 <Eyebrow>{(featuredPost.published_at || featuredPost.updated_at) ? formatDate(featuredPost.published_at || featuredPost.updated_at) : "Field note"}</Eyebrow>
-                <h3 className="font-display text-h1 text-foreground transition-colors group-hover:text-forest-700">{featuredPost.title}</h3>
+                <Link href={`/blog/${featuredPost.url_slug}`} className="group block">
+                  <h3 className="font-display text-h1 text-foreground transition-colors group-hover:text-forest-700">{featuredPost.title}</h3>
+                </Link>
                 <p className="max-w-xl text-base leading-8 text-muted-foreground">
                   {featuredPost.excerpt || "A closer look at the runners, the route, and the restoration work each race makes possible."}
                 </p>
+                <div>
+                  <Link href={`/blog/${featuredPost.url_slug}`} className="link-underline text-sm font-semibold text-tide-600">
+                    Read story
+                  </Link>
+                </div>
               </div>
-            </Link>
+            </article>
           ) : null}
 
           <div className="grid gap-8 md:grid-cols-2">

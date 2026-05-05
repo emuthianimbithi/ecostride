@@ -6,6 +6,7 @@ import { apiDelete, apiGet, apiPost } from "../../../lib/api-client"
 import { useToast } from "../../../components/toast"
 import { ClipboardList, Medal, Settings2, Trash2 } from "lucide-react"
 import { TypedConfirmDialog } from "../../../components/ui/typed-confirm-dialog"
+import { ResponsiveMedia, isVideoMedia } from "../../../components/responsive-media"
 
 type Event = {
     slug: string
@@ -31,9 +32,123 @@ type AuditLog = {
     created_at?: string
 }
 
+type MediaItem = {
+    id: number
+    slug: string
+    type: string
+    path: string
+    url: string
+    mime: string
+    size: number
+    alt_text: string
+    created_at: string
+}
+
+type EventNarrativeDraft = {
+    summary: string
+    course_headline: string
+    course_copy: string
+    cause_headline: string
+    cause_copy: string
+    faq_text: string
+    hero_media_id: string
+    hero_media_aspect_ratio: string
+    hero_media_poster_url: string
+    course_media_id: string
+    course_media_aspect_ratio: string
+    course_media_poster_url: string
+    cause_media_id: string
+    cause_media_aspect_ratio: string
+    cause_media_poster_url: string
+}
+
+function buildStructuredDescription(narrative: EventNarrativeDraft, media: MediaItem[]) {
+    const summary = narrative.summary.trim()
+    const courseHeadline = narrative.course_headline.trim()
+    const courseCopy = narrative.course_copy.trim()
+    const causeHeadline = narrative.cause_headline.trim()
+    const causeCopy = narrative.cause_copy.trim()
+    const faq = narrative.faq_text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const [question, ...answerParts] = line.split("|")
+            return {
+                question: question?.trim() || "",
+                answer: answerParts.join("|").trim()
+            }
+        })
+        .filter((item) => item.question && item.answer)
+
+    const mediaPayload = (idValue: string, aspectRatio: string, posterUrl: string) => {
+        const id = Number(idValue)
+        const item = media.find((entry) => entry.id === id)
+        if (!item) return undefined
+        return {
+            url: item.url,
+            mime: item.mime,
+            altText: item.alt_text || undefined,
+            aspectRatio: aspectRatio.trim() || undefined,
+            posterUrl: posterUrl.trim() || undefined,
+        }
+    }
+
+    const heroMedia = mediaPayload(narrative.hero_media_id, narrative.hero_media_aspect_ratio, narrative.hero_media_poster_url)
+    const courseMedia = mediaPayload(narrative.course_media_id, narrative.course_media_aspect_ratio, narrative.course_media_poster_url)
+    const causeMedia = mediaPayload(narrative.cause_media_id, narrative.cause_media_aspect_ratio, narrative.cause_media_poster_url)
+
+    const hasStructuredFields = Boolean(courseHeadline || courseCopy || causeHeadline || causeCopy || faq.length > 0)
+    if (!hasStructuredFields && !heroMedia && !courseMedia && !causeMedia) return summary
+
+    return JSON.stringify(
+        {
+            summary,
+            courseHeadline: courseHeadline || undefined,
+            courseCopy: courseCopy || undefined,
+            causeHeadline: causeHeadline || undefined,
+            causeCopy: causeCopy || undefined,
+            faq: faq.length > 0 ? faq : undefined,
+            heroMedia,
+            courseMedia,
+            causeMedia,
+        },
+        null,
+        2
+    )
+}
+
+function validateNarrativeDraft(narrative: EventNarrativeDraft) {
+    const next: Record<string, string> = {}
+    const faqLines = narrative.faq_text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+    const badFaq = faqLines.find((line) => {
+        const [question, ...answerParts] = line.split("|")
+        return !question?.trim() || !answerParts.join("|").trim()
+    })
+    if (badFaq) next.faq_text = "Each FAQ line must use: Question | Answer"
+
+    const mediaSlots = [
+        ["hero_media_id", "hero_media_aspect_ratio"],
+        ["course_media_id", "course_media_aspect_ratio"],
+        ["cause_media_id", "cause_media_aspect_ratio"],
+    ] as const
+    mediaSlots.forEach(([idKey, ratioKey]) => {
+        const id = narrative[idKey].trim()
+        const ratio = narrative[ratioKey].trim()
+        if (ratio && !id) next[ratioKey] = "Choose media before setting an aspect ratio."
+    })
+
+    return next
+}
+
 export default function EventsPage() {
     const { toast } = useToast()
     const [events, setEvents] = useState<Event[]>([])
+    const [media, setMedia] = useState<MediaItem[]>([])
     const [showForm, setShowForm] = useState(false)
     const [auditMap, setAuditMap] = useState<Record<string, { action: string; createdAt: string; actorId: number }>>({})
     const [deleteTarget, setDeleteTarget] = useState<Event | null>(null)
@@ -45,7 +160,23 @@ export default function EventsPage() {
         slug: "",
         type: "MARATHON",
         title: "",
-        description: "",
+        narrative: {
+            summary: "",
+            course_headline: "",
+            course_copy: "",
+            cause_headline: "",
+            cause_copy: "",
+            faq_text: "",
+            hero_media_id: "",
+            hero_media_aspect_ratio: "",
+            hero_media_poster_url: "",
+            course_media_id: "",
+            course_media_aspect_ratio: "",
+            course_media_poster_url: "",
+            cause_media_id: "",
+            cause_media_aspect_ratio: "",
+            cause_media_poster_url: ""
+        } as EventNarrativeDraft,
         location: "",
         map_url: "",
         start_at: "",
@@ -59,6 +190,7 @@ export default function EventsPage() {
     useEffect(() => {
         void loadEvents()
         void loadAudit()
+        void loadMedia()
         try {
             const raw = localStorage.getItem(draftKey)
             if (raw) {
@@ -116,6 +248,15 @@ export default function EventsPage() {
         }
     }
 
+    const loadMedia = async () => {
+        try {
+            const data = await apiGet<MediaItem[]>("/admin/media")
+            setMedia(Array.isArray(data) ? data : [])
+        } catch {
+            // non-blocking
+        }
+    }
+
     const setFieldError = (field: string, message?: string) => {
         setErrors((prev) => {
             const next = { ...prev }
@@ -140,6 +281,8 @@ export default function EventsPage() {
             }
         }
 
+        Object.assign(next, validateNarrativeDraft(form.narrative))
+
         setErrors(next)
         return Object.keys(next).length === 0
     }
@@ -156,7 +299,7 @@ export default function EventsPage() {
                 url_slug: form.slug.trim(),
                 type: form.type,
                 title: form.title.trim(),
-                description: form.description,
+                description: buildStructuredDescription(form.narrative, media),
                 location: form.location,
                 map_url: form.map_url,
                 start_at: new Date(form.start_at).toISOString(),
@@ -171,7 +314,23 @@ export default function EventsPage() {
                 slug: "",
                 type: "MARATHON",
                 title: "",
-                description: "",
+                narrative: {
+                    summary: "",
+                    course_headline: "",
+                    course_copy: "",
+                    cause_headline: "",
+                    cause_copy: "",
+                    faq_text: "",
+                    hero_media_id: "",
+                    hero_media_aspect_ratio: "",
+                    hero_media_poster_url: "",
+                    course_media_id: "",
+                    course_media_aspect_ratio: "",
+                    course_media_poster_url: "",
+                    cause_media_id: "",
+                    cause_media_aspect_ratio: "",
+                    cause_media_poster_url: ""
+                },
                 location: "",
                 map_url: "",
                 start_at: "",
@@ -195,6 +354,11 @@ export default function EventsPage() {
                 variant: "destructive"
             })
         }
+    }
+
+    const previewMedia = (idValue: string) => {
+        const id = Number(idValue)
+        return media.find((item) => item.id === id) ?? null
     }
 
     useEffect(() => {
@@ -361,13 +525,212 @@ export default function EventsPage() {
                         </div>
                     </div>
 
-                    <textarea
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                        rows={3}
-                        placeholder="Description"
-                    />
+                    <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="space-y-1">
+                            <h3 className="text-sm font-semibold text-slate-800">Event narrative</h3>
+                            <p className="text-xs text-slate-500">
+                                This feeds the public event page. Leave the advanced fields blank if you only want a normal summary.
+                            </p>
+                        </div>
+
+                        <textarea
+                            value={form.narrative.summary}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    narrative: { ...form.narrative, summary: e.target.value }
+                                })
+                            }
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            rows={4}
+                            placeholder="Hero summary / main event description"
+                        />
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                            <input
+                                value={form.narrative.course_headline}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        narrative: { ...form.narrative, course_headline: e.target.value }
+                                    })
+                                }
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Course section headline"
+                            />
+                            <input
+                                value={form.narrative.cause_headline}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        narrative: { ...form.narrative, cause_headline: e.target.value }
+                                    })
+                                }
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Cause section headline"
+                            />
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                            <textarea
+                                value={form.narrative.course_copy}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        narrative: { ...form.narrative, course_copy: e.target.value }
+                                    })
+                                }
+                                className="min-h-32 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Course narrative"
+                            />
+                            <textarea
+                                value={form.narrative.cause_copy}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        narrative: { ...form.narrative, cause_copy: e.target.value }
+                                    })
+                                }
+                                className="min-h-32 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Cause narrative"
+                            />
+                        </div>
+
+                        <textarea
+                            value={form.narrative.faq_text}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    narrative: { ...form.narrative, faq_text: e.target.value }
+                                })
+                            }
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            rows={4}
+                            placeholder={"FAQ lines as Question | Answer\nExample: Where does the course start? | Sabaki estuary access point."}
+                        />
+                        {errors.faq_text ? <p className="text-xs text-rose-600">{errors.faq_text}</p> : null}
+
+                        <div className="grid gap-4 md:grid-cols-3">
+                            {[
+                                { key: "hero", label: "Hero media", fallback: "4:5" },
+                                { key: "course", label: "Course media", fallback: "16:9" },
+                                { key: "cause", label: "Cause media", fallback: "4:3" }
+                            ].map((slot) => {
+                                const mediaId = form.narrative[`${slot.key}_media_id` as keyof EventNarrativeDraft] as string
+                                const aspectRatio = form.narrative[`${slot.key}_media_aspect_ratio` as keyof EventNarrativeDraft] as string
+                                const posterUrl = form.narrative[`${slot.key}_media_poster_url` as keyof EventNarrativeDraft] as string
+                                const selected = media.find((item) => String(item.id) === mediaId)
+                                const video = selected ? isVideoMedia(selected.url, selected.mime, selected.type) : false
+                                return (
+                                    <div key={slot.key} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{slot.label}</p>
+                                        <select
+                                            value={mediaId}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    narrative: { ...form.narrative, [`${slot.key}_media_id`]: e.target.value }
+                                                })
+                                            }
+                                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        >
+                                            <option value="">None</option>
+                                            {media.map((item) => (
+                                                <option key={`${slot.key}-${item.id}`} value={item.id}>
+                                                    {item.alt_text || item.url}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            value={aspectRatio}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    narrative: { ...form.narrative, [`${slot.key}_media_aspect_ratio`]: e.target.value }
+                                                })
+                                            }
+                                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                            placeholder={`Aspect ratio (${slot.fallback})`}
+                                        />
+                                        {errors[`${slot.key}_media_aspect_ratio`] ? (
+                                            <p className="text-xs text-rose-600">{errors[`${slot.key}_media_aspect_ratio`]}</p>
+                                        ) : null}
+                                        {video ? (
+                                            <input
+                                                value={posterUrl}
+                                                onChange={(e) =>
+                                                    setForm({
+                                                        ...form,
+                                                        narrative: { ...form.narrative, [`${slot.key}_media_poster_url`]: e.target.value }
+                                                    })
+                                                }
+                                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                                placeholder="Poster URL (optional)"
+                                            />
+                                        ) : null}
+                                        {selected ? (
+                                            <ResponsiveMedia
+                                                src={selected.url}
+                                                alt={selected.alt_text}
+                                                mime={selected.mime}
+                                                type={selected.type}
+                                                poster={posterUrl || undefined}
+                                                aspectRatio={aspectRatio || slot.fallback}
+                                                className="overflow-hidden rounded-xl"
+                                                fillMode="cover"
+                                                controls={video}
+                                                preload="metadata"
+                                            />
+                                        ) : null}
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Public preview</p>
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-semibold text-slate-800">{form.title || "Event title preview"}</h3>
+                                <p className="text-sm text-slate-600">{form.narrative.summary || "Hero summary preview"}</p>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-3">
+                                {[
+                                    { key: "hero", label: "Hero media", fallback: "4:5" },
+                                    { key: "course", label: "Course media", fallback: "16:9" },
+                                    { key: "cause", label: "Cause media", fallback: "4:3" }
+                                ].map((slot) => {
+                                    const selected = previewMedia(form.narrative[`${slot.key}_media_id` as keyof EventNarrativeDraft] as string)
+                                    const aspectRatio = form.narrative[`${slot.key}_media_aspect_ratio` as keyof EventNarrativeDraft] as string
+                                    const posterUrl = form.narrative[`${slot.key}_media_poster_url` as keyof EventNarrativeDraft] as string
+                                    if (!selected) {
+                                        return (
+                                            <div key={`preview-${slot.key}`} className="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">
+                                                {slot.label}: no media selected
+                                            </div>
+                                        )
+                                    }
+                                    const video = isVideoMedia(selected.url, selected.mime, selected.type)
+                                    return (
+                                        <div key={`preview-${slot.key}`} className="space-y-2">
+                                            <p className="text-xs text-slate-500">{slot.label}</p>
+                                            <ResponsiveMedia
+                                                src={selected.url}
+                                                alt={selected.alt_text}
+                                                mime={selected.mime}
+                                                type={selected.type}
+                                                poster={posterUrl || undefined}
+                                                aspectRatio={aspectRatio || slot.fallback}
+                                                className="overflow-hidden rounded-xl"
+                                                fillMode="cover"
+                                                controls={video}
+                                                preload="metadata"
+                                            />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
 
                     <button onClick={handleCreate} className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white">
                         Create event
@@ -390,7 +753,23 @@ export default function EventsPage() {
                                         slug: "",
                                         type: "MARATHON",
                                         title: "",
-                                        description: "",
+                                        narrative: {
+                                            summary: "",
+                                            course_headline: "",
+                                            course_copy: "",
+                                            cause_headline: "",
+                                            cause_copy: "",
+                                            faq_text: "",
+                                            hero_media_id: "",
+                                            hero_media_aspect_ratio: "",
+                                            hero_media_poster_url: "",
+                                            course_media_id: "",
+                                            course_media_aspect_ratio: "",
+                                            course_media_poster_url: "",
+                                            cause_media_id: "",
+                                            cause_media_aspect_ratio: "",
+                                            cause_media_poster_url: ""
+                                        },
                                         location: "",
                                         map_url: "",
                                         start_at: "",

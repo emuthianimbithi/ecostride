@@ -6,6 +6,7 @@ import { useToast } from "../../../../components/toast"
 import { toastApiError } from "../../../../lib/toast-api-error"
 import { BlogHero, type HeroStyle } from "../../../../components/blog-hero"
 import { compressVideo, isCompressibleVideo } from "../../../../lib/compress-video"
+import { ResponsiveMedia, isVideoMedia } from "../../../../components/responsive-media"
 
 // --------------------
 // API response types (snake_case)
@@ -50,6 +51,18 @@ type field_errors = {
     media_url?: string
 }
 
+type post_media_block = {
+    id: string
+    media_id?: number | null
+    url: string
+    mime: string
+    type: "image" | "video" | "media"
+    alt_text: string
+    caption: string
+    aspect_ratio: string
+    poster_url: string
+}
+
 function is_valid_url_slug(s: string) {
     // lowercase, numbers, hyphens; no spaces; no leading/trailing hyphen
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)
@@ -62,6 +75,88 @@ function is_valid_http_url(value: string) {
     } catch {
         return false
     }
+}
+
+function extract_media_blocks(content: unknown): post_media_block[] {
+    if (!Array.isArray(content)) return []
+
+    return content.flatMap((block, index) => {
+            if (!block || typeof block !== "object") return null
+            const record = block as { type?: string; data?: Record<string, unknown> }
+            const data = record.data ?? {}
+            const url =
+                typeof data.url === "string"
+                    ? data.url
+                    : typeof data.src === "string"
+                      ? data.src
+                      : typeof data.imageUrl === "string"
+                        ? data.imageUrl
+                        : ""
+            if (!url) return null
+
+            const mime =
+                typeof data.mime === "string"
+                    ? data.mime
+                    : typeof data.contentType === "string"
+                      ? data.contentType
+                      : typeof data.mimeType === "string"
+                        ? data.mimeType
+                        : ""
+            const type = isVideoMedia(url, mime, record.type) ? "video" : "image"
+
+            return {
+                id: `${index}-${url}`,
+                media_id: typeof data.mediaId === "number" ? data.mediaId : null,
+                url,
+                mime,
+                type,
+                alt_text:
+                    typeof data.altText === "string"
+                        ? data.altText
+                        : typeof data.alt === "string"
+                          ? data.alt
+                          : "",
+                caption: typeof data.caption === "string" ? data.caption : "",
+                aspect_ratio:
+                    typeof data.aspectRatio === "string"
+                        ? data.aspectRatio
+                        : typeof data.ratio === "string"
+                          ? data.ratio
+                          : "",
+                poster_url:
+                    typeof data.posterUrl === "string"
+                        ? data.posterUrl
+                        : typeof data.poster === "string"
+                          ? data.poster
+                          : "",
+            } satisfies post_media_block
+        })
+        .filter(Boolean) as post_media_block[]
+}
+
+function build_post_content(body: string, media_blocks: post_media_block[]) {
+    const blocks: Array<{ type: string; data: Record<string, unknown> }> = []
+    const trimmed = body.trim()
+    if (trimmed) {
+        blocks.push({ type: "paragraph", data: { body: trimmed } })
+    }
+
+    media_blocks.forEach((block) => {
+        blocks.push({
+            type: block.type,
+            data: {
+                url: block.url,
+                altText: block.alt_text,
+                caption: block.caption,
+                mime: block.mime,
+                posterUrl: block.poster_url || undefined,
+                aspectRatio: block.aspect_ratio || undefined,
+                mediaId: block.media_id || undefined,
+            }
+        })
+    })
+
+    return blocks
 }
 
 export default function Page() {
@@ -82,7 +177,8 @@ export default function Page() {
         body: "",
         featured_image_id: "",
         hero_style_id: "",
-        hero_show_title: true
+        hero_show_title: true,
+        media_blocks: [] as post_media_block[]
     })
 
     const [media_form, setMediaForm] = useState({
@@ -201,7 +297,8 @@ export default function Page() {
             body: "",
             featured_image_id: "",
             hero_style_id: "",
-            hero_show_title: true
+            hero_show_title: true,
+            media_blocks: []
         })
         setEditingSlug(null)
         setFieldErrors({})
@@ -275,8 +372,7 @@ export default function Page() {
             return
         }
 
-        const trimmed_body = form.body.trim()
-        const content_payload = trimmed_body ? { type: "markdown", body: trimmed_body } : {}
+        const content_payload = build_post_content(form.body, form.media_blocks)
         const featured_image_media_id = form.featured_image_id ? Number(form.featured_image_id) : undefined
         const hero_style_id = form.hero_style_id.trim() ? form.hero_style_id.trim() : undefined
 
@@ -340,7 +436,8 @@ export default function Page() {
             body: extract_body(post.content),
             featured_image_id: post.featured_image_media_id ? String(post.featured_image_media_id) : "",
             hero_style_id: post.hero_style_id ?? "",
-            hero_show_title: post.hero_show_title ?? true
+            hero_show_title: post.hero_show_title ?? true,
+            media_blocks: extract_media_blocks(post.content)
         })
         setEditingSlug(post.slug) // UUID slug
         setError(null)
@@ -490,6 +587,65 @@ export default function Page() {
         return null
     }, [form.hero_style_id, hero_styles, default_hero_style_id])
 
+    const [block_media_id, setBlockMediaId] = useState("")
+
+    const add_media_block = () => {
+        const id = block_media_id ? Number(block_media_id) : NaN
+        const item = media.find((entry) => entry.id === id)
+        if (!item) {
+            setError("Choose a media item to add to the post body.")
+            return
+        }
+
+        const isVideo = isVideoMedia(item.url, item.mime, item.type)
+        setForm((prev) => ({
+            ...prev,
+            media_blocks: [
+                ...prev.media_blocks,
+                {
+                    id: `${item.id}-${Date.now()}`,
+                    media_id: item.id,
+                    url: item.url,
+                    mime: item.mime,
+                    type: isVideo ? "video" : "image",
+                    alt_text: item.alt_text,
+                    caption: "",
+                    aspect_ratio: "",
+                    poster_url: ""
+                }
+            ]
+        }))
+        setBlockMediaId("")
+        setError(null)
+    }
+
+    const update_media_block = (id: string, patch: Partial<post_media_block>) => {
+        setForm((prev) => ({
+            ...prev,
+            media_blocks: prev.media_blocks.map((block) => (block.id === id ? { ...block, ...patch } : block))
+        }))
+    }
+
+    const move_media_block = (id: string, direction: -1 | 1) => {
+        setForm((prev) => {
+            const index = prev.media_blocks.findIndex((block) => block.id === id)
+            if (index < 0) return prev
+            const nextIndex = index + direction
+            if (nextIndex < 0 || nextIndex >= prev.media_blocks.length) return prev
+            const nextBlocks = [...prev.media_blocks]
+            const [block] = nextBlocks.splice(index, 1)
+            nextBlocks.splice(nextIndex, 0, block)
+            return { ...prev, media_blocks: nextBlocks }
+        })
+    }
+
+    const remove_media_block = (id: string) => {
+        setForm((prev) => ({
+            ...prev,
+            media_blocks: prev.media_blocks.filter((block) => block.id !== id)
+        }))
+    }
+
     return (
         <main className="space-y-6">
             <div>
@@ -567,6 +723,125 @@ export default function Page() {
               placeholder="Write the main blog content here."
           />
                     {field_errors.body && <p className="text-xs text-rose-600">{field_errors.body}</p>}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="text-sm font-semibold text-slate-800">Body media blocks</h3>
+                        <p className="text-xs text-slate-500">
+                            Add reusable images or videos from the media library. Videos render with native player controls on the public blog.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                        <select
+                            value={block_media_id}
+                            onChange={(e) => setBlockMediaId(e.target.value)}
+                            className="min-w-[18rem] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                            <option value="">Choose media to insert</option>
+                            {media_options.map((option) => (
+                                <option key={`block-${option.key}`} value={option.id}>
+                                    {option.label || `Media ${option.id}`}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={add_media_block}
+                            className="rounded-full border border-forest/25 px-4 py-2 text-sm font-semibold text-forest"
+                        >
+                            Add to post body
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {form.media_blocks.map((block, index) => {
+                            const video = isVideoMedia(block.url, block.mime, block.type)
+                            return (
+                                <div key={block.id} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+                                    <div className="space-y-2">
+                                        <ResponsiveMedia
+                                            src={block.url}
+                                            alt={block.alt_text}
+                                            mime={block.mime}
+                                            type={block.type}
+                                            poster={block.poster_url || undefined}
+                                            aspectRatio={block.aspect_ratio || undefined}
+                                            className="overflow-hidden rounded-xl"
+                                            fillMode="contain"
+                                            controls={video}
+                                            preload="metadata"
+                                        />
+                                        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                                            {video ? "Video block" : "Image block"} #{index + 1}
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            <input
+                                                value={block.alt_text}
+                                                onChange={(e) => update_media_block(block.id, { alt_text: e.target.value })}
+                                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                                placeholder="Alt text"
+                                            />
+                                            <input
+                                                value={block.aspect_ratio}
+                                                onChange={(e) => update_media_block(block.id, { aspect_ratio: e.target.value })}
+                                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                                placeholder="Aspect ratio (e.g. 16:9, 4:5)"
+                                            />
+                                        </div>
+
+                                        <input
+                                            value={block.caption}
+                                            onChange={(e) => update_media_block(block.id, { caption: e.target.value })}
+                                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                            placeholder="Caption"
+                                        />
+
+                                        {video ? (
+                                            <input
+                                                value={block.poster_url}
+                                                onChange={(e) => update_media_block(block.id, { poster_url: e.target.value })}
+                                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                                placeholder="Poster image URL (optional)"
+                                            />
+                                        ) : null}
+
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => move_media_block(block.id, -1)}
+                                                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                                            >
+                                                Move up
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => move_media_block(block.id, 1)}
+                                                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                                            >
+                                                Move down
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => remove_media_block(block.id)}
+                                                className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+
+                        {form.media_blocks.length === 0 ? (
+                            <p className="text-sm text-slate-500">No media blocks yet.</p>
+                        ) : null}
+                    </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">

@@ -116,11 +116,34 @@ export default function Page() {
       <div className="mx-auto max-w-6xl space-y-10">
         <div className="max-w-2xl space-y-3">
           <Eyebrow>Support</Eyebrow>
-          <h1 className="font-display text-h1 text-foreground md:text-display-lg">Back the coastline with donations, merch, and direct event support.</h1>
+          <h1 className="font-display text-h1 text-foreground md:text-display-lg">Back the Circular Economy Hub, the wet-sand marathon, and the systems behind both.</h1>
           <p className="text-base leading-8 text-muted-foreground">
-            The checkout stays practical. The message stays clear: this is how cleanup, restoration, and race logistics get funded.
+            This is not only race support. It is the funding path for cleanup logistics, circular infrastructure, and the public campaign that brings the world into Malindi&apos;s plastic story.
           </p>
         </div>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              title: "Compliance capital",
+              copy: "For producers and importers who need credible downstream recovery pathways."
+            },
+            {
+              title: "Tourism competitiveness",
+              copy: "For hospitality and destination brands that depend on a cleaner coastline and stronger global perception."
+            },
+            {
+              title: "Green investment",
+              copy: "For backers treating circular infrastructure and recovery systems as real long-term assets."
+            }
+          ].map((item) => (
+            <div key={item.title} className="border border-sand-200 bg-sand-50 p-5 space-y-2">
+              <Eyebrow>{item.title}</Eyebrow>
+              <h2 className="font-display text-h3 text-foreground">{item.title}</h2>
+              <p className="text-sm leading-7 text-muted-foreground">{item.copy}</p>
+            </div>
+          ))}
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <section className="space-y-4 border border-sand-200 bg-background p-6">

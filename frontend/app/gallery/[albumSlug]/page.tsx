@@ -54,7 +54,7 @@ export default async function Page({ params }: PageProps) {
             </div>
 
             <div className="mx-auto max-w-6xl space-y-4">
-              <p className="text-xs tracking-[0.16em] text-muted-foreground">LIGHTBOX: ← → Esc</p>
+              <p className="text-xs tracking-[0.16em] text-muted-foreground">LIGHTBOX / VIDEO: ← → Esc, native controls enabled on videos</p>
               <GalleryGrid items={data.media} fallbackAlt={data.album.title} />
             </div>
           </Reveal>

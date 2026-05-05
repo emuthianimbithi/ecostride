@@ -7,7 +7,7 @@ type Pillar = { title: string; desc: string; icon: ReactNode }
 
 const PILLARS: Pillar[] = [
   {
-    title: "Clean",
+    title: "Account",
     desc: "Organising weekly community beach cleanups along the Kenyan coast — removing plastic before it reaches the deep ocean.",
     icon: (
       <path
@@ -19,8 +19,8 @@ const PILLARS: Pillar[] = [
     )
   },
   {
-    title: "Educate",
-    desc: "Partnering with local schools in Malindi to teach the next generation about marine conservation and sustainable living.",
+    title: "Run",
+    desc: "Using the Estuary Wet Sand Marathon to turn shoreline science, public visibility, and endurance sport into a global environmental statement.",
     icon: (
       <path
         strokeLinecap="round"
@@ -31,8 +31,8 @@ const PILLARS: Pillar[] = [
     )
   },
   {
-    title: "Protect",
-    desc: "Safeguarding sea-turtle nesting grounds and restoring vital coral reef habitats along the shoreline.",
+    title: "Build",
+    desc: "Aligning investors, compliance capital, and local enterprise around the Malindi Circular Economy Hub as the real finish line.",
     icon: (
       <path
         strokeLinecap="round"
@@ -50,10 +50,10 @@ export function MalindiImpact() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <p className="font-body text-sand-700 tracking-[0.24em] uppercase text-sm font-bold mb-3">
-            Preserving the beauty of Kenya&apos;s coast
+            PWAM x EcoStride
           </p>
           <h3 className="font-display text-4xl md:text-5xl text-forest-800 font-bold">
-            Our mission
+            The ocean returns what we try to hide
           </h3>
         </div>
 

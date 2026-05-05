@@ -34,10 +34,10 @@ export default async function Page() {
         <Reveal className="space-y-12">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div className="max-w-2xl space-y-3">
-              <Eyebrow>Sponsors</Eyebrow>
-              <h1 className="font-display text-h1 text-foreground md:text-display-lg">Tiered partners backing race logistics, cleanup work, and the public face of EcoStride.</h1>
+              <Eyebrow>Partners</Eyebrow>
+              <h1 className="font-display text-h1 text-foreground md:text-display-lg">Manufacturers, tourism players, importers, and finance partners backing Malindi&apos;s circular transition.</h1>
               <p className="text-base leading-8 text-muted-foreground">
-                Top-tier logos carry more visual weight. Lower tiers stay present without pretending every partnership is the same shape.
+                This is more than logo placement. These partnerships back compliance pathways, public environmental accountability, and the infrastructure behind the Sabaki Estuary Wet Sand Marathon.
               </p>
             </div>
             <Link

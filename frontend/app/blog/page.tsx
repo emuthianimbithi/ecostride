@@ -1,8 +1,8 @@
-import Image from "next/image"
 import Link from "next/link"
 import { EditorialCard } from "../../components/editorial-card"
 import { Eyebrow } from "../../components/eyebrow"
 import { Reveal } from "../../components/reveal"
+import { ResponsiveMedia, isVideoMedia } from "../../components/responsive-media"
 import { Section } from "../../components/section"
 import { formatDate } from "../../lib/format"
 import { serverGet } from "../../lib/api-server"
@@ -31,6 +31,7 @@ export default async function Page() {
 
   const featuredPost = posts[0]
   const remainingPosts = posts.slice(1)
+  const featuredVideo = featuredPost?.featured_image_url ? isVideoMedia(featuredPost.featured_image_url) : false
 
   return (
     <main>
@@ -42,29 +43,40 @@ export default async function Page() {
           </div>
 
           {featuredPost ? (
-            <Link href={`/blog/${featuredPost.url_slug}`} className="group grid gap-6 md:grid-cols-[1.35fr_minmax(0,1fr)]">
-              <div className="relative aspect-[16/8] overflow-hidden bg-sand-100">
+            <article className="group grid gap-6 md:grid-cols-[1.35fr_minmax(0,1fr)]">
+              <div className="relative aspect-[16/8] overflow-hidden rounded-2xl bg-sand-100">
                 {featuredPost.featured_image_url ? (
-                  <Image
+                  <ResponsiveMedia
                     src={featuredPost.featured_image_url}
                     alt={featuredPost.title}
-                    fill
-                    className="editorial-image object-cover transition duration-500 group-hover:scale-[1.03]"
+                    className="h-full"
+                    mediaClassName={!featuredVideo ? "transition duration-500 group-hover:scale-[1.03]" : "h-full w-full"}
+                    fillMode={featuredVideo ? "contain" : "cover"}
+                    controls={featuredVideo}
+                    videoMode={featuredVideo ? "player" : "ambient"}
+                    preload={featuredVideo ? "auto" : "metadata"}
                   />
                 ) : (
-                  <div className="editorial-placeholder h-full w-full" />
+                  <div className="editorial-placeholder h-full w-full rounded-2xl" />
                 )}
               </div>
               <div className="flex flex-col justify-center space-y-4">
                 <Eyebrow>{postDate(featuredPost)}</Eyebrow>
-                <h2 className="font-display text-h1 text-foreground transition-colors group-hover:text-forest-700">
-                  {featuredPost.title}
-                </h2>
+                <Link href={`/blog/${featuredPost.url_slug}`} className="group block">
+                  <h2 className="font-display text-h1 text-foreground transition-colors group-hover:text-forest-700">
+                    {featuredPost.title}
+                  </h2>
+                </Link>
                 <p className="max-w-xl text-base leading-8 text-muted-foreground">
                   {featuredPost.excerpt || "Long-form stories from the shoreline, the race route, and the cleanup work attached to every event."}
                 </p>
+                <div>
+                  <Link href={`/blog/${featuredPost.url_slug}`} className="link-underline text-sm font-semibold text-tide-600">
+                    Read story
+                  </Link>
+                </div>
               </div>
-            </Link>
+            </article>
           ) : null}
 
           {remainingPosts.length > 0 ? (

@@ -1,3 +1,5 @@
+import { ResponsiveMedia, isVideoMedia } from "./responsive-media"
+
 type CMSBlock = {
   type?: string
   data?: Record<string, unknown>
@@ -33,6 +35,32 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
               ? data.altText
               : ""
         const caption = typeof data.caption === "string" ? data.caption : ""
+        const mime =
+          typeof data.mime === "string"
+            ? data.mime
+            : typeof data.contentType === "string"
+              ? data.contentType
+              : typeof data.mimeType === "string"
+                ? data.mimeType
+                : ""
+        const poster =
+          typeof data.poster === "string"
+            ? data.poster
+            : typeof data.posterUrl === "string"
+              ? data.posterUrl
+              : typeof data.thumbnailUrl === "string"
+                ? data.thumbnailUrl
+                : ""
+        const width = typeof data.width === "number" ? data.width : null
+        const height = typeof data.height === "number" ? data.height : null
+        const aspectRatio =
+          typeof data.aspectRatio === "string" || typeof data.aspectRatio === "number"
+            ? data.aspectRatio
+            : typeof data.ratio === "string" || typeof data.ratio === "number"
+              ? data.ratio
+              : width && height
+                ? `${width}:${height}`
+                : null
         const text =
           typeof data.text === "string"
             ? data.text
@@ -57,17 +85,26 @@ export function CMSBlocks({ blocks }: { blocks: CMSBlock[] | null }) {
               </blockquote>
             )
           case "image":
+          case "video":
+          case "media":
             if (!imageURL) {
               return null
             }
             return (
               <figure key={key} className="space-y-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <ResponsiveMedia
                   src={imageURL}
                   alt={alt}
-                  className="editorial-image w-full bg-muted object-cover"
-                  loading="lazy"
+                  mime={mime}
+                  type={block.type}
+                  poster={poster}
+                  aspectRatio={aspectRatio}
+                  width={width}
+                  height={height}
+                  className="max-h-[75vh]"
+                  mediaClassName={isVideoMedia(imageURL, mime, block.type) ? "max-h-[75vh]" : undefined}
+                  fillMode="contain"
+                  controls={isVideoMedia(imageURL, mime, block.type)}
                 />
                 {caption && <figcaption className="text-xs text-muted-foreground">{caption}</figcaption>}
               </figure>
