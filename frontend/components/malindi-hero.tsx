@@ -52,6 +52,7 @@ export function MalindiHero({
 }) {
   const [activeScene, setActiveScene] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [hasEntered, setHasEntered] = useState(false)
 
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
@@ -75,16 +76,21 @@ export function MalindiHero({
   const palmY = useTransform(smoothY, (v) => v * -10)
 
   useEffect(() => {
-    const timeout = setTimeout(() => setIsLoaded(true), 100)
-    return () => clearTimeout(timeout)
+    const frame = window.requestAnimationFrame(() => setIsLoaded(true))
+    const enterTimer = window.setTimeout(() => setHasEntered(true), 2600)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(enterTimer)
+    }
   }, [])
 
   useEffect(() => {
+    if (!hasEntered) return
     const timer = setInterval(() => {
       setActiveScene((scene) => (scene + 1) % SCENES.length)
     }, SCENE_DURATION)
     return () => clearInterval(timer)
-  }, [])
+  }, [hasEntered])
 
   const handleMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
     const { clientX, clientY } = e
@@ -624,9 +630,9 @@ export function MalindiHero({
           <AnimatePresence mode="wait">
             <motion.div
               key={activeScene}
-              initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="flex flex-col items-center"
             >
