@@ -7,6 +7,7 @@ import { useToast } from "../../../components/toast"
 import { ClipboardList, Medal, Settings2, Trash2 } from "lucide-react"
 import { TypedConfirmDialog } from "../../../components/ui/typed-confirm-dialog"
 import { ResponsiveMedia, isVideoMedia } from "../../../components/responsive-media"
+import { normalizeMediaItems, type NormalizedMediaItem } from "../../../lib/normalize-media"
 
 type Event = {
     slug: string
@@ -33,17 +34,7 @@ type AuditLog = {
     created_at?: string
 }
 
-type MediaItem = {
-    id: number
-    slug: string
-    type: string
-    path: string
-    url: string
-    mime: string
-    size: number
-    alt_text: string
-    created_at: string
-}
+type MediaItem = NormalizedMediaItem
 
 type EventNarrativeDraft = {
     summary: string
@@ -254,8 +245,8 @@ export default function EventsPage() {
 
     const loadMedia = async () => {
         try {
-            const data = await apiGet<MediaItem[]>("/admin/media")
-            setMedia(Array.isArray(data) ? data : [])
+            const data = await apiGet<unknown>("/admin/media")
+            setMedia(normalizeMediaItems(data))
         } catch {
             // non-blocking
         }
@@ -376,6 +367,8 @@ export default function EventsPage() {
         const id = Number(idValue)
         return media.find((item) => item.id === id) ?? null
     }
+
+    const selectableMedia = media.filter((item) => Number.isFinite(item.id))
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -672,7 +665,7 @@ export default function EventsPage() {
                                 const mediaId = form.narrative[`${slot.key}_media_id` as keyof EventNarrativeDraft] as string
                                 const aspectRatio = form.narrative[`${slot.key}_media_aspect_ratio` as keyof EventNarrativeDraft] as string
                                 const posterUrl = form.narrative[`${slot.key}_media_poster_url` as keyof EventNarrativeDraft] as string
-                                const selected = media.find((item) => String(item.id) === mediaId)
+                                const selected = selectableMedia.find((item) => String(item.id) === mediaId)
                                 const video = selected ? isVideoMedia(selected.url, selected.mime, selected.type) : false
                                 return (
                                     <div key={slot.key} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
@@ -688,8 +681,8 @@ export default function EventsPage() {
                                             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                         >
                                             <option value="">None</option>
-                                            {media.map((item) => (
-                                                <option key={`${slot.key}-${item.id}`} value={item.id}>
+                                            {selectableMedia.map((item) => (
+                                                <option key={`${slot.key}-${item.id}-${item.slug || item.url}`} value={item.id}>
                                                     {item.alt_text || item.url}
                                                 </option>
                                             ))}

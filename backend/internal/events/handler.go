@@ -1,9 +1,12 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,8 +14,10 @@ import (
 	"ecostride/backend/internal/auth"
 	"ecostride/backend/internal/cms"
 	"ecostride/backend/internal/common/apierrors"
+	"ecostride/backend/internal/common/config"
 	"ecostride/backend/internal/common/dto"
 	"ecostride/backend/internal/common/models"
+	"ecostride/backend/internal/common/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,10 +30,12 @@ type Handler struct {
 	Service    *Service
 	CMSService *cms.Service
 	Audit      *audit.Service
+	Config     config.Config
+	Storage    storage.StorageProvider
 }
 
-func NewHandler(service *Service, cmsService *cms.Service, auditService *audit.Service) *Handler {
-	return &Handler{Service: service, CMSService: cmsService, Audit: auditService}
+func NewHandler(service *Service, cmsService *cms.Service, auditService *audit.Service, cfg config.Config, storageProvider storage.StorageProvider) *Handler {
+	return &Handler{Service: service, CMSService: cmsService, Audit: auditService, Config: cfg, Storage: storageProvider}
 }
 
 type eventRequest struct {
@@ -110,6 +117,20 @@ type formFieldRequest struct {
 	Order    int             `json:"order"`
 }
 
+type eventMediaRequest struct {
+	MediaIDs []uint `json:"media_ids"`
+}
+
+type eventMediaItem struct {
+	MediaID   uint   `json:"media_id"`
+	SortOrder int    `json:"sort_order"`
+	URL       string `json:"url"`
+	Path      string `json:"path"`
+	Mime      string `json:"mime"`
+	AltText   string `json:"alt_text"`
+	Type      string `json:"type"`
+}
+
 func (h *Handler) ListPublicEvents(c *gin.Context) {
 	// get search params if any (e.g., date range, location) - omitted for brevity
 	// search
@@ -146,6 +167,15 @@ func (h *Handler) ListPublicFormFields(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.EventFormFieldsFromModels(fields))
+}
+
+func (h *Handler) ListPublicEventMedia(c *gin.Context) {
+	event, err := h.Service.GetEventBySlug(c.Request.Context(), c.Param("slug"))
+	if err != nil || event.Status != "published" {
+		apierrors.AbortWithError(c, http.StatusNotFound, "", "event not found", nil)
+		return
+	}
+	h.respondEventMedia(c, event.ID)
 }
 
 func (h *Handler) ListPublicCategories(c *gin.Context) {
@@ -588,6 +618,64 @@ func (h *Handler) ListFormFields(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.EventFormFieldsFromModels(fields))
 }
 
+func (h *Handler) ListEventMedia(c *gin.Context) {
+	event, err := h.getEventBySlugParam(c)
+	if err != nil {
+		return
+	}
+	h.respondEventMedia(c, event.ID)
+}
+
+func (h *Handler) SetEventMedia(c *gin.Context) {
+	event, err := h.getEventBySlugParam(c)
+	if err != nil {
+		return
+	}
+
+	var req eventMediaRequest
+	if !apierrors.BindJSON(c, &req) {
+		return
+	}
+
+	if err := h.Service.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if len(req.MediaIDs) > 0 {
+			var count int64
+			if err := tx.Model(&models.Media{}).Where("id IN ?", req.MediaIDs).Count(&count).Error; err != nil {
+				return err
+			}
+			if count != int64(len(req.MediaIDs)) {
+				apierrors.AbortWithError(c, http.StatusBadRequest, "", "one or more media_ids do not exist", nil)
+				return fmt.Errorf("invalid media ids")
+			}
+		}
+
+		if err := tx.Unscoped().Where("event_id = ?", event.ID).Delete(&models.EventMedia{}).Error; err != nil {
+			return err
+		}
+
+		for i, mediaID := range req.MediaIDs {
+			link := models.EventMedia{
+				EventID:   event.ID,
+				MediaID:   mediaID,
+				SortOrder: i + 1,
+			}
+			if err := tx.Create(&link).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		if c.IsAborted() {
+			return
+		}
+		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to set event media", nil)
+		return
+	}
+
+	h.logAudit(c, "event.media.set", "event", event.Slug.String(), nil, gin.H{"media_ids": req.MediaIDs})
+	h.respondEventMedia(c, event.ID)
+}
+
 func (h *Handler) CreateFormField(c *gin.Context) {
 	event, err := h.getEventBySlugParam(c)
 	if err != nil {
@@ -696,6 +784,64 @@ func (h *Handler) getEventBySlugParam(c *gin.Context) (models.Event, error) {
 	}
 
 	return event, nil
+}
+
+func (h *Handler) respondEventMedia(c *gin.Context, eventID uint) {
+	var media []eventMediaItem
+	if err := h.Service.DB.WithContext(c.Request.Context()).
+		Table("event_media").
+		Select("event_media.media_id, event_media.sort_order, media.url, media.path, media.mime, media.alt_text, media.type").
+		Joins("JOIN media ON media.id = event_media.media_id").
+		Where("event_media.event_id = ?", eventID).
+		Order("event_media.sort_order asc").
+		Scan(&media).Error; err != nil {
+		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to load event media", nil)
+		return
+	}
+
+	for i := range media {
+		m := models.Media{URL: media[i].URL, Path: media[i].Path}
+		m = resolveMediaURL(c.Request.Context(), h.Storage, h.Config.MediaDir, m)
+		media[i].URL = m.URL
+	}
+
+	c.JSON(http.StatusOK, media)
+}
+
+func resolveMediaURL(ctx context.Context, provider storage.StorageProvider, mediaDir string, m models.Media) models.Media {
+	if strings.TrimSpace(m.URL) != "" || strings.TrimSpace(m.Path) == "" || provider == nil {
+		return m
+	}
+
+	objectKey := m.Path
+	if _, ok := provider.(*storage.LocalProvider); ok {
+		objectKey = normalizeLegacyLocalPathToKey(mediaDir, objectKey)
+	}
+
+	m.URL = provider.GetPublicURL(ctx, objectKey)
+	return m
+}
+
+func normalizeLegacyLocalPathToKey(mediaDir, pathOrKey string) string {
+	pathOrKey = strings.TrimSpace(pathOrKey)
+	if pathOrKey == "" || strings.TrimSpace(mediaDir) == "" {
+		return pathOrKey
+	}
+
+	if strings.Contains(pathOrKey, "/") && !strings.Contains(pathOrKey, string(os.PathSeparator)) {
+		return pathOrKey
+	}
+
+	if rel, err := filepath.Rel(mediaDir, pathOrKey); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(rel)
+	}
+
+	if strings.HasPrefix(filepath.Clean(pathOrKey), filepath.Clean(mediaDir)+string(filepath.Separator)) {
+		rel := strings.TrimPrefix(filepath.Clean(pathOrKey), filepath.Clean(mediaDir)+string(filepath.Separator))
+		return filepath.ToSlash(rel)
+	}
+
+	return filepath.ToSlash(pathOrKey)
 }
 
 func (h *Handler) logAudit(c *gin.Context, action, entityType, entityID string, oldValue interface{}, newValue interface{}) {

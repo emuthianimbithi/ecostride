@@ -3,7 +3,7 @@ import { ArrowRight, CalendarDays, Clock3, MapPin } from "lucide-react"
 import { Eyebrow } from "../../../components/eyebrow"
 import { MobileRegisterBar } from "../../../components/mobile-register-bar"
 import { Reveal } from "../../../components/reveal"
-import { ResponsiveMedia } from "../../../components/responsive-media"
+import { ResponsiveMedia, isVideoMedia } from "../../../components/responsive-media"
 import { Section } from "../../../components/section"
 import { formatDate, formatDateTime, formatMoney } from "../../../lib/format"
 import { serverGet } from "../../../lib/api-server"
@@ -30,6 +30,16 @@ type CategoryApi = {
   price_kes_minor: number
   price_usd_minor?: number | null
   price_eur_minor?: number | null
+}
+
+type EventMediaApi = {
+  media_id: number
+  sort_order: number
+  url: string
+  path: string
+  mime: string
+  alt_text: string
+  type: string
 }
 
 type PageProps = {
@@ -63,6 +73,23 @@ type EventNarrativeMedia = {
 
 function isNarrativeVideo(media?: EventNarrativeMedia) {
   return Boolean(media?.url && media?.mime?.toLowerCase().startsWith("video/"))
+}
+
+function eventHeroAltText(media: EventNarrativeMedia | EventMediaApi, fallback: string) {
+  const record = media as { altText?: string; alt_text?: string }
+  return record.altText || record.alt_text || fallback
+}
+
+function eventHeroType(media: EventNarrativeMedia | EventMediaApi) {
+  return "type" in media ? media.type : undefined
+}
+
+function eventHeroPoster(media: EventNarrativeMedia | EventMediaApi) {
+  return "posterUrl" in media ? media.posterUrl : undefined
+}
+
+function eventHeroAspectRatio(media: EventNarrativeMedia | EventMediaApi, fallback: string) {
+  return "aspectRatio" in media ? media.aspectRatio || fallback : fallback
 }
 
 function parseEventNarrative(raw: string) {
@@ -248,10 +275,11 @@ export default async function Page({ params }: PageProps) {
   const { slug } = await params
 
   try {
-    const [event, categories, sponsors] = await Promise.all([
+    const [event, categories, sponsors, eventMedia] = await Promise.all([
       serverGet<EventApi>(`/public/events/${slug}`),
       serverGet<CategoryApi[]>(`/public/events/${slug}/categories`).catch(() => []),
-      serverGet<any[]>(`/public/sponsors?placement=EVENT_PAGE&event_slug=${slug}`).catch(() => [])
+      serverGet<any[]>(`/public/sponsors?placement=EVENT_PAGE&event_slug=${slug}`).catch(() => []),
+      serverGet<EventMediaApi[]>(`/public/events/${slug}/media`).catch(() => [])
     ])
 
     const normalizedSponsors = sponsors.map(normalizeSponsor)
@@ -270,6 +298,8 @@ export default async function Page({ params }: PageProps) {
 
     const registerHref = `/register/${event.url_slug}`
     const detailsHref = event.results_published ? `/results/${event.url_slug}` : "/events"
+    const galleryMedia = Array.isArray(eventMedia) ? eventMedia : []
+    const heroMedia = narrative.heroMedia?.url ? narrative.heroMedia : galleryMedia[0]
 
     return (
       <>
@@ -304,19 +334,20 @@ export default async function Page({ params }: PageProps) {
                 </div>
 
                 <div className="space-y-4">
-                  {narrative.heroMedia?.url ? (
+                  {heroMedia?.url ? (
                     <ResponsiveMedia
-                      src={narrative.heroMedia.url}
-                      alt={narrative.heroMedia.altText || event.title}
-                      mime={narrative.heroMedia.mime}
-                      poster={narrative.heroMedia.posterUrl}
-                      aspectRatio={narrative.heroMedia.aspectRatio || "4:5"}
+                      src={heroMedia.url}
+                      alt={eventHeroAltText(heroMedia, event.title)}
+                      mime={heroMedia.mime}
+                      type={eventHeroType(heroMedia)}
+                      poster={eventHeroPoster(heroMedia)}
+                      aspectRatio={eventHeroAspectRatio(heroMedia, "4:5")}
                       className="overflow-hidden rounded-2xl border border-white/15 bg-black/20"
                       mediaClassName="h-full w-full"
-                      fillMode={isNarrativeVideo(narrative.heroMedia) ? "contain" : "cover"}
-                      controls={isNarrativeVideo(narrative.heroMedia)}
-                      videoMode={isNarrativeVideo(narrative.heroMedia) ? "player" : "ambient"}
-                      preload={isNarrativeVideo(narrative.heroMedia) ? "auto" : "metadata"}
+                      fillMode={isVideoMedia(heroMedia.url, heroMedia.mime, eventHeroType(heroMedia)) ? "contain" : "cover"}
+                      controls={isVideoMedia(heroMedia.url, heroMedia.mime, eventHeroType(heroMedia))}
+                      videoMode={isVideoMedia(heroMedia.url, heroMedia.mime, eventHeroType(heroMedia)) ? "player" : "ambient"}
+                      preload={isVideoMedia(heroMedia.url, heroMedia.mime, eventHeroType(heroMedia)) ? "auto" : "metadata"}
                       playsInline
                     />
                   ) : null}
@@ -559,6 +590,42 @@ export default async function Page({ params }: PageProps) {
               </div>
             </Reveal>
           </Section>
+
+          {galleryMedia.length > 0 ? (
+            <Section>
+              <Reveal className="space-y-5">
+                <div className="space-y-3">
+                  <Eyebrow>Event media</Eyebrow>
+                  <h2 className="font-display text-h1 text-foreground">Field visuals, shoreline proof, and route atmosphere.</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {galleryMedia.map((item, index) => {
+                    const video = isVideoMedia(item.url, item.mime, item.type)
+                    return (
+                      <div key={`${item.media_id}-${index}`} className="space-y-2">
+                        <ResponsiveMedia
+                          src={item.url}
+                          alt={item.alt_text || `${event.title} media ${index + 1}`}
+                          mime={item.mime}
+                          type={item.type}
+                          aspectRatio="4:3"
+                          className="overflow-hidden rounded-2xl border border-sand-200"
+                          fillMode={video ? "contain" : "cover"}
+                          controls={video}
+                          videoMode={video ? "player" : "ambient"}
+                          preload={video ? "auto" : "metadata"}
+                          playsInline
+                        />
+                        {item.alt_text ? (
+                          <p className="text-sm leading-6 text-muted-foreground">{item.alt_text}</p>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </Reveal>
+            </Section>
+          ) : null}
 
           <Section>
             <Reveal className="space-y-5">

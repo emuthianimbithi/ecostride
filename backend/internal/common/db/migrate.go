@@ -37,6 +37,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Event{},
 		&models.EventCategory{},
 		&models.EventFormField{},
+		&models.EventMedia{},
 		&models.Registration{},
 		&models.ConsentRecord{},
 		&models.BibAssignment{},

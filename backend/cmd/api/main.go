@@ -57,7 +57,7 @@ func main() {
 	cmsService := cms.NewService(conn)
 	cmsHandler := cms.NewHandler(cmsService, auditService, cfg, storageProvider)
 	eventsService := events.NewService(conn)
-	eventsHandler := events.NewHandler(eventsService, cmsService, auditService)
+	eventsHandler := events.NewHandler(eventsService, cmsService, auditService, cfg, storageProvider)
 	registrationService := registrations.NewService(conn)
 	registrationsHandler := registrations.NewHandler(registrationService, auditService, conn, cfg, jobsService, receiptService)
 	paymentsService := payments.NewService(conn, cfg, receiptService)

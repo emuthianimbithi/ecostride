@@ -112,3 +112,11 @@ func (s *Service) UpdateFormField(ctx context.Context, field models.EventFormFie
 func (s *Service) DeleteFormField(ctx context.Context, field models.EventFormField) error {
 	return s.DB.WithContext(ctx).Delete(&field).Error
 }
+
+func (s *Service) ListEventMedia(ctx context.Context, eventID uint) ([]models.EventMedia, error) {
+	var media []models.EventMedia
+	if err := s.DB.WithContext(ctx).Where("event_id = ?", eventID).Order("sort_order asc").Find(&media).Error; err != nil {
+		return nil, err
+	}
+	return media, nil
+}

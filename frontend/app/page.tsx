@@ -7,7 +7,7 @@ import { MalindiImpact } from "../components/malindi-impact"
 import { Reveal } from "../components/reveal"
 import { ResponsiveMedia, isVideoMedia } from "../components/responsive-media"
 import { Section } from "../components/section"
-import { formatDate } from "../lib/format"
+import { formatDate, registrationWindowLabel } from "../lib/format"
 import { serverGet } from "../lib/api-server"
 
 type EventApi = {
@@ -15,6 +15,7 @@ type EventApi = {
   url_slug: string
   title: string
   type: string
+  description?: string
   location: string
   start_at: string
   reg_open_at?: string | null
@@ -58,6 +59,36 @@ type SponsorApi = {
   logo_url?: string | null
 }
 
+type EventMediaApi = {
+  media_id: number
+  sort_order: number
+  url: string
+  path: string
+  mime: string
+  alt_text: string
+  type: string
+}
+
+function mediaAltText(media: unknown) {
+  const record = media as { altText?: string; alt_text?: string }
+  return record.altText || record.alt_text
+}
+
+function mediaTypeValue(media: unknown) {
+  const record = media as { type?: string }
+  return record.type
+}
+
+function mediaPosterValue(media: unknown) {
+  const record = media as { posterUrl?: string }
+  return record.posterUrl
+}
+
+function mediaAspectRatioValue(media: unknown, fallback: string) {
+  const record = media as { aspectRatio?: string }
+  return record.aspectRatio || fallback
+}
+
 function formatEventCountdown(startAt?: string | null) {
   if (!startAt) return "Date to be announced"
   const startDate = new Date(startAt)
@@ -89,6 +120,29 @@ function eventCauseTag(eventType: string) {
   return "Coastal action"
 }
 
+function featuredEventSummary(event?: EventApi) {
+  if (!event?.description) {
+    return "A flagship coastline event tying race-day energy to estuary accountability, cleanup operations, and long-term circular economy infrastructure."
+  }
+  try {
+    const parsed = JSON.parse(event.description) as { summary?: string }
+    if (typeof parsed.summary === "string" && parsed.summary.trim()) return parsed.summary.trim()
+  } catch {}
+  return event.description
+}
+
+function featuredEventHeroMedia(event?: EventApi) {
+  if (!event?.description) return null
+  try {
+    const parsed = JSON.parse(event.description) as { heroMedia?: { url?: string; mime?: string; altText?: string; posterUrl?: string; aspectRatio?: string } }
+    const heroMedia = parsed.heroMedia
+    if (!heroMedia?.url) return null
+    return heroMedia
+  } catch {
+    return null
+  }
+}
+
 export default async function HomePage() {
   const [events, posts, albums, sponsors] = await Promise.all([
     serverGet<EventApi[]>("/public/events", { next: { revalidate: 60 } }).catch(() => []),
@@ -102,6 +156,7 @@ export default async function HomePage() {
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
 
   const featuredEvent = upcomingEvents.find((event) => event.is_featured) ?? upcomingEvents[0]
+  const featuredEventNarrativeMedia = featuredEventHeroMedia(featuredEvent)
   const featuredPost = posts[0]
   const secondaryPosts = posts.slice(1, 3)
   const featuredAlbums = albums.slice(0, 3)
@@ -121,15 +176,26 @@ export default async function HomePage() {
     })
   )
 
+  const featuredEventMedia = featuredEvent
+    ? await serverGet<EventMediaApi[]>(`/public/events/${featuredEvent.url_slug}/media`, {
+        next: { revalidate: 60 }
+      }).catch(() => [])
+    : []
+  const featuredSpotlightMedia = featuredEventNarrativeMedia ?? featuredEventMedia[0] ?? null
+
   return (
     <main>
-      <MalindiHero primaryLabel="Join the movement" />
+      <MalindiHero
+        primaryLabel="Join the movement"
+        secondaryLabel={featuredEvent ? `Go to ${featuredEvent.title}` : "Go to main event"}
+        scrollTargetId="main-event-spotlight"
+      />
 
       <MalindiImpact />
 
       <div className="sticky top-[72px] z-30 border-y border-sand-300 bg-sand-200 text-forest-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-sm font-semibold sm:px-6 md:px-8">
-          <span className="uppercase tracking-[0.2em]">Next event</span>
+          <span className="uppercase tracking-[0.2em]">{featuredEvent?.is_featured ? "Main event" : "Next event"}</span>
           <span className="hidden h-1 w-1 rounded-full bg-forest-900/50 sm:block" />
           <span>{featuredEvent?.title ?? "Sabaki Estuary Wet-Sand Marathon"}</span>
           <span className="hidden h-1 w-1 rounded-full bg-forest-900/50 sm:block" />
@@ -144,6 +210,83 @@ export default async function HomePage() {
           </Link>
         </div>
       </div>
+
+      {featuredEvent ? (
+        <Section id="main-event-spotlight" className="border-b border-sand-200 bg-background">
+          <Reveal className="space-y-8">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_420px] lg:items-center">
+              <div className="space-y-5">
+                <Eyebrow>Main Event Spotlight</Eyebrow>
+                <div className="space-y-4">
+                  <h2 className="font-display text-h1 text-foreground md:text-display-lg">{featuredEvent.title}</h2>
+                  <p className="max-w-3xl text-base leading-8 text-muted-foreground">
+                    {featuredEventSummary(featuredEvent)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-foreground">
+                  <span className="font-semibold uppercase tracking-[0.16em] text-tide-600">{featuredEvent.type.replaceAll("_", " ")}</span>
+                  <span>{formatDate(featuredEvent.start_at)}</span>
+                  <span>{featuredEvent.location || "Malindi, Kenya"}</span>
+                  <span>{registrationWindowLabel(featuredEvent.reg_open_at, featuredEvent.reg_close_at)}</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={`/events/${featuredEvent.url_slug}`}
+                    className="button-lift inline-flex h-11 items-center justify-center rounded-full bg-forest-700 px-5 text-sm font-semibold text-white hover:bg-forest-600"
+                  >
+                    View main event
+                  </Link>
+                  <Link
+                    href={`/register/${featuredEvent.url_slug}`}
+                    className="button-lift inline-flex h-11 items-center justify-center rounded-full border border-sand-300 px-5 text-sm font-semibold text-foreground hover:bg-sand-50"
+                  >
+                    Register now
+                  </Link>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {featuredSpotlightMedia ? (
+                  <ResponsiveMedia
+                    src={featuredSpotlightMedia.url}
+                    alt={mediaAltText(featuredSpotlightMedia) || `${featuredEvent.title} featured media`}
+                    mime={featuredSpotlightMedia.mime}
+                    type={mediaTypeValue(featuredSpotlightMedia)}
+                    poster={mediaPosterValue(featuredSpotlightMedia)}
+                    aspectRatio={mediaAspectRatioValue(featuredSpotlightMedia, "4:5")}
+                    className="aspect-[4/5] border border-sand-200"
+                    fillMode={isVideoMedia(featuredSpotlightMedia.url, featuredSpotlightMedia.mime, mediaTypeValue(featuredSpotlightMedia)) ? "contain" : "cover"}
+                    controls={isVideoMedia(featuredSpotlightMedia.url, featuredSpotlightMedia.mime, mediaTypeValue(featuredSpotlightMedia))}
+                    videoMode={isVideoMedia(featuredSpotlightMedia.url, featuredSpotlightMedia.mime, mediaTypeValue(featuredSpotlightMedia)) ? "player" : "ambient"}
+                    preload={isVideoMedia(featuredSpotlightMedia.url, featuredSpotlightMedia.mime, mediaTypeValue(featuredSpotlightMedia)) ? "auto" : "metadata"}
+                  />
+                ) : (
+                  <ResponsiveMedia
+                    src="/coastal-race.svg"
+                    alt={`${featuredEvent.title} featured event illustration`}
+                    className="aspect-[4/5] border border-sand-200"
+                    fillMode="cover"
+                  />
+                )}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">Status</p>
+                    <p className="mt-2 text-sm text-foreground">Main homepage event</p>
+                  </div>
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">Countdown</p>
+                    <p className="mt-2 text-sm text-foreground">{formatEventCountdown(featuredEvent.start_at)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">Cause</p>
+                    <p className="mt-2 text-sm text-foreground">{eventCauseTag(featuredEvent.type)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </Section>
+      ) : null}
 
       <Section tone="sand" className="relative overflow-hidden">
         <div className="grain-overlay" />
@@ -164,7 +307,9 @@ export default async function HomePage() {
                 className="grid gap-6 border-b border-sand-200 pb-10 last:border-b-0 last:pb-0 md:grid-cols-[160px_minmax(0,1fr)]"
               >
                 <div className="space-y-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-tide-600">{monthDivider(event.start_at)} ↘</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-tide-600">
+                    {event.is_featured ? "MAIN EVENT ↘" : `${monthDivider(event.start_at)} ↘`}
+                  </p>
                   <div className="relative aspect-[4/5] w-full overflow-hidden bg-sand-100">
                     <ResponsiveMedia
                       src="/coastal-course.svg"

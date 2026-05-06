@@ -230,6 +230,14 @@ type EventFormField struct {
 	Order    int            `json:"order"`
 }
 
+type EventMedia struct {
+	gorm.Model
+	Slug      uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();uniqueIndex" json:"slug"`
+	EventID   uint      `gorm:"uniqueIndex:idx_event_media" json:"event_id"`
+	MediaID   uint      `gorm:"uniqueIndex:idx_event_media" json:"media_id"`
+	SortOrder int       `json:"sort_order"`
+}
+
 // Registrations + consent
 
 type Registration struct {
@@ -654,6 +662,13 @@ func (m *EventCategory) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 func (m *EventFormField) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.Slug == uuid.Nil {
+		m.Slug = uuid.New()
+	}
+	return nil
+}
+
+func (m *EventMedia) BeforeCreate(tx *gorm.DB) (err error) {
 	if m.Slug == uuid.Nil {
 		m.Slug = uuid.New()
 	}

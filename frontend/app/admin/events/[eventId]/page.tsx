@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { apiDelete, apiGet, apiPost, apiPut } from "../../../../lib/api-client"
 import { Pencil, Trash2 } from "lucide-react"
 import { ResponsiveMedia, isVideoMedia } from "../../../../components/responsive-media"
+import { normalizeMediaItems, type NormalizedMediaItem } from "../../../../lib/normalize-media"
 
 type Event = {
     slug: string
@@ -21,16 +22,16 @@ type Event = {
     reg_close_at?: string | null
 }
 
-type MediaItem = {
-    id: number
-    slug: string
-    type: string
-    path: string
+type MediaItem = NormalizedMediaItem
+
+type EventAttachedMedia = {
+    media_id: number
+    sort_order: number
     url: string
+    path: string
     mime: string
-    size: number
     alt_text: string
-    created_at: string
+    type: string
 }
 
 type EventNarrativeDraft = {
@@ -211,6 +212,8 @@ export default function EventDetailPage() {
     const [media, setMedia] = useState<MediaItem[]>([])
     const [categories, setCategories] = useState<Category[]>([])
     const [formFields, setFormFields] = useState<FormField[]>([])
+    const [attachedMedia, setAttachedMedia] = useState<EventAttachedMedia[]>([])
+    const [selectedMediaIds, setSelectedMediaIds] = useState<number[]>([])
     const [status, setStatus] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [eventErrors, setEventErrors] = useState<Record<string, string>>({})
@@ -286,16 +289,29 @@ export default function EventDetailPage() {
 
     const loadMedia = async () => {
         try {
-            const data = await apiGet<MediaItem[]>("/admin/media")
-            setMedia(Array.isArray(data) ? data : [])
+            const data = await apiGet<unknown>("/admin/media")
+            setMedia(normalizeMediaItems(data))
         } catch {
             // non-blocking
+        }
+    }
+
+    const loadAttachedMedia = async () => {
+        try {
+            const data = await apiGet<EventAttachedMedia[]>(`/admin/events/${eventId}/media`)
+            const next = Array.isArray(data) ? data : []
+            setAttachedMedia(next)
+            setSelectedMediaIds(next.map((item) => item.media_id))
+        } catch {
+            setAttachedMedia([])
+            setSelectedMediaIds([])
         }
     }
 
     useEffect(() => {
         void loadEvent()
         void loadMedia()
+        void loadAttachedMedia()
         void loadCategories()
         void loadFormFields()
     }, [eventId])
@@ -443,6 +459,43 @@ export default function EventDetailPage() {
     const previewMedia = (idValue: string) => {
         const id = Number(idValue)
         return media.find((item) => item.id === id) ?? null
+    }
+
+    const selectableMedia = useMemo(() => media.filter((item) => Number.isFinite(item.id)), [media])
+    const selectedMediaSet = useMemo(() => new Set(selectedMediaIds), [selectedMediaIds])
+
+    const toggleAttachedMedia = (mediaId: number) => {
+        setSelectedMediaIds((prev) =>
+            prev.includes(mediaId) ? prev.filter((id) => id !== mediaId) : [...prev, mediaId]
+        )
+    }
+
+    const moveAttachedMedia = (mediaId: number, direction: "up" | "down") => {
+        setSelectedMediaIds((prev) => {
+            const index = prev.indexOf(mediaId)
+            if (index === -1) return prev
+            const targetIndex = direction === "up" ? index - 1 : index + 1
+            if (targetIndex < 0 || targetIndex >= prev.length) return prev
+            const next = [...prev]
+            ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
+            return next
+        })
+    }
+
+    const handleSaveAttachedMedia = async () => {
+        setError(null)
+        setStatus(null)
+        try {
+            const data = await apiPut<EventAttachedMedia[]>(`/admin/events/${eventId}/media`, {
+                media_ids: selectedMediaIds
+            })
+            const next = Array.isArray(data) ? data : []
+            setAttachedMedia(next)
+            setSelectedMediaIds(next.map((item) => item.media_id))
+            setStatus("Event gallery media updated")
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to save event media")
+        }
     }
 
     const handleCategorySave = async () => {
@@ -763,7 +816,7 @@ export default function EventDetailPage() {
                             const mediaId = eventForm.narrative[`${slot.key}_media_id` as keyof EventNarrativeDraft] as string
                             const aspectRatio = eventForm.narrative[`${slot.key}_media_aspect_ratio` as keyof EventNarrativeDraft] as string
                             const posterUrl = eventForm.narrative[`${slot.key}_media_poster_url` as keyof EventNarrativeDraft] as string
-                            const selected = media.find((item) => String(item.id) === mediaId)
+                            const selected = selectableMedia.find((item) => String(item.id) === mediaId)
                             const video = selected ? isVideoMedia(selected.url, selected.mime, selected.type) : false
                             return (
                                 <div key={slot.key} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
@@ -779,8 +832,8 @@ export default function EventDetailPage() {
                                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                     >
                                         <option value="">None</option>
-                                        {media.map((item) => (
-                                            <option key={`${slot.key}-${item.id}`} value={item.id}>
+                                        {selectableMedia.map((item) => (
+                                            <option key={`${slot.key}-${item.id}-${item.slug || item.url}`} value={item.id}>
                                                 {item.alt_text || item.url}
                                             </option>
                                         ))}
@@ -880,6 +933,115 @@ export default function EventDetailPage() {
                     <button onClick={handleEventSave} className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white">
                         Save event content
                     </button>
+                </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+                <div>
+                    <h2 className="text-lg font-semibold text-slate-800">Event gallery media</h2>
+                    <p className="text-sm text-slate-600">Attach multiple photos or videos for the public event page and homepage spotlight.</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">Saved attachments: {attachedMedia.length}</p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {selectableMedia.map((item) => {
+                            const selected = selectedMediaSet.has(item.id)
+                            const video = isVideoMedia(item.url, item.mime, item.type)
+                            return (
+                                <label
+                                    key={`event-media-${item.id}-${item.slug || item.url}`}
+                                    className={`space-y-3 rounded-2xl border p-3 ${selected ? "border-forest bg-white" : "border-slate-200 bg-white"}`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-slate-800">{item.alt_text || item.slug || item.url}</p>
+                                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{video ? "Video" : "Image"}</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            onChange={() => toggleAttachedMedia(item.id)}
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                    <ResponsiveMedia
+                                        src={item.url}
+                                        alt={item.alt_text}
+                                        mime={item.mime}
+                                        type={item.type}
+                                        aspectRatio="4:3"
+                                        className="overflow-hidden rounded-xl"
+                                        fillMode="cover"
+                                        controls={video}
+                                        preload="metadata"
+                                    />
+                                </label>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Attached order preview</p>
+                        <button
+                            onClick={handleSaveAttachedMedia}
+                            className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+                        >
+                            Save attached media
+                        </button>
+                    </div>
+                    {selectedMediaIds.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                            No event gallery media selected yet.
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {selectedMediaIds.map((mediaId, index) => {
+                                const item = selectableMedia.find((entry) => entry.id === mediaId)
+                                if (!item) return null
+                                const video = isVideoMedia(item.url, item.mime, item.type)
+                                return (
+                                    <div key={`attached-${mediaId}-${index}`} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800">{item.alt_text || item.slug || item.url}</p>
+                                                <p className="text-xs text-slate-500">Position {index + 1}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveAttachedMedia(mediaId, "up")}
+                                                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700"
+                                                >
+                                                    Up
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveAttachedMedia(mediaId, "down")}
+                                                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700"
+                                                >
+                                                    Down
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <ResponsiveMedia
+                                            src={item.url}
+                                            alt={item.alt_text}
+                                            mime={item.mime}
+                                            type={item.type}
+                                            aspectRatio="4:3"
+                                            className="overflow-hidden rounded-xl"
+                                            fillMode="cover"
+                                            controls={video}
+                                            preload="metadata"
+                                        />
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             </section>
 

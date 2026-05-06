@@ -35,6 +35,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	// Public events
 	public.GET("/events", handlers.Events.ListPublicEvents)
 	public.GET("/events/:slug", handlers.Events.GetPublicEvent)
+	public.GET("/events/:slug/media", handlers.Events.ListPublicEventMedia)
 	public.GET("/events/:slug/categories", handlers.Events.ListPublicCategories)
 	public.GET("/events/:slug/waiver/current", handlers.Events.GetCurrentWaiver)
 	public.GET("/events/:slug/form-fields", handlers.Events.ListPublicFormFields)
@@ -116,6 +117,8 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	admin.PUT("/events/:id", RequirePermission("event.write"), handlers.Events.UpdateEvent)
 	admin.DELETE("/events/:id", RequirePermission("event.write"), handlers.Events.DeleteEvent)
 	admin.POST("/events/:id/publish", RequirePermission("event.publish"), handlers.Events.PublishEvent)
+	admin.GET("/events/:id/media", RequirePermission("event.read"), handlers.Events.ListEventMedia)
+	admin.PUT("/events/:id/media", RequirePermission("event.write"), handlers.Events.SetEventMedia)
 	admin.GET("/events/:id/categories", RequirePermission("event.category.write"), handlers.Events.ListCategories)
 	admin.POST("/events/:id/categories", RequirePermission("event.category.write"), handlers.Events.CreateCategory)
 	admin.PUT("/events/:id/categories/:categoryId", RequirePermission("event.category.write"), handlers.Events.UpdateCategory)

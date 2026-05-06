@@ -46,9 +46,13 @@ const SCENES: Scene[] = [
 const SCENE_DURATION = 6000
 
 export function MalindiHero({
-  primaryLabel = "Join the movement"
+  primaryLabel = "Join the movement",
+  secondaryLabel,
+  scrollTargetId
 }: {
   primaryLabel?: string
+  secondaryLabel?: string
+  scrollTargetId?: string
 }) {
   const [activeScene, setActiveScene] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -100,6 +104,17 @@ export function MalindiHero({
   }
 
   const headlineWords = SCENES[activeScene].headline.split(" ")
+
+  const handlePrimaryAction = () => {
+    if (scrollTargetId) {
+      const target = document.getElementById(scrollTargetId)
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" })
+        return
+      }
+    }
+    window.scrollTo({ top: window.innerHeight, behavior: "smooth" })
+  }
 
   return (
     <div
@@ -657,19 +672,31 @@ export function MalindiHero({
             </motion.div>
           </AnimatePresence>
 
-          <motion.button
-            type="button"
-            onClick={() => {
-              window.scrollTo({ top: window.innerHeight, behavior: "smooth" })
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: isLoaded ? 1 : 0, scale: isLoaded ? 1 : 0.9 }}
-            transition={{ duration: 1, delay: 3 }}
-            className="mt-12 inline-flex rounded-full border border-[#E7D8C0]/35 bg-[#E1D0B2] px-10 py-4 font-body text-sm font-bold uppercase tracking-[0.2em] text-[#081522] transition-colors hover:bg-[#F1E4CF] pointer-events-auto"
-            style={{ animation: "mh-pulseGlow 3s infinite alternate" }}
-          >
-            {primaryLabel}
-          </motion.button>
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+            <motion.button
+              type="button"
+              onClick={handlePrimaryAction}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: isLoaded ? 1 : 0, scale: isLoaded ? 1 : 0.9 }}
+              transition={{ duration: 1, delay: 3 }}
+              className="inline-flex rounded-full border border-[#E7D8C0]/35 bg-[#E1D0B2] px-10 py-4 font-body text-sm font-bold uppercase tracking-[0.2em] text-[#081522] transition-colors hover:bg-[#F1E4CF] pointer-events-auto"
+              style={{ animation: "mh-pulseGlow 3s infinite alternate" }}
+            >
+              {primaryLabel}
+            </motion.button>
+            {secondaryLabel ? (
+              <motion.button
+                type="button"
+                onClick={handlePrimaryAction}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: isLoaded ? 1 : 0, scale: isLoaded ? 1 : 0.9 }}
+                transition={{ duration: 1, delay: 3.1 }}
+                className="pointer-events-auto inline-flex rounded-full border border-[#E7D8C0]/25 bg-[#081522]/35 px-6 py-4 font-body text-sm font-semibold text-[#F5EBDD] backdrop-blur-sm transition-colors hover:bg-[#081522]/55"
+              >
+                {secondaryLabel}
+              </motion.button>
+            ) : null}
+          </div>
         </div>
 
         <motion.div
