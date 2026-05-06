@@ -177,9 +177,9 @@ export default async function HomePage() {
   )
 
   const featuredEventMedia = featuredEvent
-    ? await serverGet<EventMediaApi[]>(`/public/events/${featuredEvent.url_slug}/media`, {
+    ? (await serverGet<EventMediaApi[] | null>(`/public/events/${featuredEvent.url_slug}/media`, {
         next: { revalidate: 60 }
-      }).catch(() => [])
+      }).catch(() => [])) ?? []
     : []
   const featuredSpotlightMedia = featuredEventNarrativeMedia ?? featuredEventMedia[0] ?? null
 
