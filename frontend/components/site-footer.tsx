@@ -228,7 +228,7 @@ export function SiteFooter() {
             </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Mail className="h-4 w-4" />
-              hello@ecostride.org
+              hello@estuarymarathon.com
             </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Phone className="h-4 w-4" />

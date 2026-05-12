@@ -9,7 +9,7 @@ export function ContactForm() {
   const [subject, setSubject] = useState("Sponsor inquiry")
   const [message, setMessage] = useState("")
 
-  const mailtoHref = `mailto:hello@ecostride.org?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+  const mailtoHref = `mailto:hello@estuarymarathon.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
     `Name: ${name}\nEmail: ${email}\n\n${message}`
   )}`
 

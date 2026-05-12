@@ -36,8 +36,8 @@ export default function Page() {
               </div>
               <div className="space-y-2 border-t border-sand-200 pt-4">
                 <Mail className="h-5 w-5 text-tide-600" />
-                <a href="mailto:hello@ecostride.org" className="link-underline text-sm font-semibold text-foreground">
-                  hello@ecostride.org
+                <a href="mailto:hello@estuarymarathon.com" className="link-underline text-sm font-semibold text-foreground">
+                  hello@estuarymarathon.com
                 </a>
                 <p className="text-sm text-muted-foreground">Best for sponsor and partnership requests.</p>
               </div>
