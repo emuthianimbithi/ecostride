@@ -78,6 +78,23 @@ type SponsorTier = {
     Priority: number
 }
 
+type SponsorTierAPI = {
+    slug?: string
+    Slug?: string
+    name?: string
+    Name?: string
+    priority?: number
+    Priority?: number
+}
+
+function normalizeSponsorTier(raw: SponsorTierAPI): SponsorTier {
+    return {
+        Slug: String(raw.slug ?? raw.Slug ?? ""),
+        Name: String(raw.name ?? raw.Name ?? ""),
+        Priority: Number(raw.priority ?? raw.Priority ?? 0)
+    }
+}
+
 type SponsorAnalytics = {
     PageKey: string
     Count: number
@@ -175,13 +192,21 @@ export default function SponsorsPage() {
         }
     }
 
-    const loadTiers = async () => {
+    const loadTiers = async (preferredSlug?: string) => {
         try {
-            const data = await apiGet<SponsorTier[]>("/admin/sponsor-tiers")
-            setTiers(data)
-            if (data.length > 0 && !sponsorForm.tierSlug) {
-                setSponsorForm((prev) => ({ ...prev, tierSlug: data[0].Slug }))
-            }
+            const data = await apiGet<SponsorTierAPI[]>("/admin/sponsor-tiers")
+            const normalized = (Array.isArray(data) ? data : [])
+                .map(normalizeSponsorTier)
+                .filter((tier) => tier.Slug && tier.Name)
+            setTiers(normalized)
+            setSponsorForm((prev) => ({
+                ...prev,
+                tierSlug: preferredSlug && normalized.some((tier) => tier.Slug === preferredSlug)
+                    ? preferredSlug
+                    : normalized.some((tier) => tier.Slug === prev.tierSlug)
+                        ? prev.tierSlug
+                        : normalized[0]?.Slug ?? ""
+            }))
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Failed to load tiers")
@@ -325,7 +350,7 @@ export default function SponsorsPage() {
             return
         }
         try {
-            await apiPost("/admin/sponsor-tiers", {
+            const created = await apiPost<SponsorTierAPI>("/admin/sponsor-tiers", {
                 name: tierForm.name.trim(),
                 priority: Number(tierForm.priority)
             })
@@ -333,7 +358,7 @@ export default function SponsorsPage() {
             setTierForm({ name: "", priority: 1 })
             setTierErrors({})
             setShowTierForm(false)
-            await loadTiers()
+            await loadTiers(created.slug ?? created.Slug)
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Failed to create tier")
@@ -409,13 +434,13 @@ export default function SponsorsPage() {
         <main className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold text-forest">Sponsors</h1>
+                    <h1 className="text-2xl font-semibold text-forest-900">Sponsors</h1>
                     <p className="text-sm text-slate-600">Manage tiers, placements, and profiles.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button
                         onClick={() => setShowTierForm((prev) => !prev)}
-                        className="inline-flex items-center gap-2 rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
+                        className="inline-flex items-center gap-2 rounded-full border border-forest-700/30 px-4 py-2 text-sm font-semibold text-forest-800 transition hover:bg-forest-50"
                     >
                         {showTierForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                         {showTierForm ? "Close tier" : "New tier"}
@@ -425,7 +450,7 @@ export default function SponsorsPage() {
                             setShowSponsorForm((prev) => !prev)
                             if (!showSponsorForm) resetSponsorForm()
                         }}
-                        className="inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+                        className="inline-flex items-center gap-2 rounded-full bg-forest-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-forest-800"
                     >
                         {showSponsorForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                         {showSponsorForm ? "Close sponsor" : "New sponsor"}
@@ -475,7 +500,7 @@ export default function SponsorsPage() {
 
                     <button
                         onClick={() => void handleCreateTier()}
-                        className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+                        className="rounded-full bg-forest-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-forest-800"
                     >
                         Create tier
                     </button>
@@ -528,6 +553,9 @@ export default function SponsorsPage() {
                                     sponsorErrors.tierSlug ? "border-rose-300" : "border-slate-200"
                                 }`}
                             >
+                                <option value="" disabled>
+                                    {tiers.length > 0 ? "Select a tier" : "Create a tier first"}
+                                </option>
                                 {tiers.map((tier) => (
                                     <option key={tier.Slug} value={tier.Slug}>
                                         {tier.Name}
@@ -535,6 +563,9 @@ export default function SponsorsPage() {
                                 ))}
                             </select>
                             {sponsorErrors.tierSlug ? <p className="text-xs text-rose-600">{sponsorErrors.tierSlug}</p> : null}
+                            {tiers.length === 0 ? (
+                                <p className="text-xs text-amber-700">Create a sponsor tier before saving a sponsor.</p>
+                            ) : null}
                         </div>
 
                         <div className="space-y-1">
@@ -614,7 +645,7 @@ export default function SponsorsPage() {
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => void handleSaveSponsor()}
-                            className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-full bg-forest-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-forest-800"
                         >
                             {editingSponsor ? "Update sponsor" : "Create sponsor"}
                         </button>
@@ -710,7 +741,7 @@ export default function SponsorsPage() {
                         </button>
                         <button
                             onClick={() => void handleSavePlacements()}
-                            className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-full bg-forest-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-forest-800"
                         >
                             Save placements
                         </button>

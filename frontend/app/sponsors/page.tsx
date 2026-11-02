@@ -55,25 +55,35 @@ export default async function Page() {
                   <Eyebrow>{tierName}</Eyebrow>
                   <h2 className="font-display text-h2 text-foreground">{tierIndex === 0 ? "Lead supporters" : "Supporting partners"}</h2>
                 </div>
-                <div className={`grid gap-6 ${tierIndex === 0 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {items.map((sponsor) => (
-                    <Link key={sponsor.slug} href={`/sponsors/${sponsor.url_slug}`} className="group space-y-4">
-                      <div className="flex min-h-[148px] items-center justify-center border border-sand-200 bg-background p-8 transition group-hover:border-forest-300">
+                    <Link
+                      key={sponsor.slug}
+                      href={`/sponsors/${sponsor.url_slug}`}
+                      className="group overflow-hidden border border-sand-200 bg-background transition hover:border-forest-300 hover:shadow-md"
+                    >
+                      <div className="relative aspect-[4/3] overflow-hidden bg-white">
                         {sponsor.logo.url ? (
                           <Image
                             src={sponsor.logo.url}
                             alt={sponsor.logo.alt || sponsor.name}
-                            width={tierIndex === 0 ? 180 : 120}
-                            height={tierIndex === 0 ? 180 : 120}
-                            className="max-h-20 w-auto object-contain"
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                            className="object-contain p-8 transition-transform duration-300 group-hover:scale-105"
                           />
                         ) : (
-                          <span className="font-display text-3xl text-foreground">{sponsor.name}</span>
+                          <span className="flex h-full items-center justify-center px-6 text-center font-display text-2xl text-foreground">
+                            {sponsor.name}
+                          </span>
                         )}
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="font-display text-h3 text-foreground transition-colors group-hover:text-forest-700">{sponsor.name}</h3>
-                        <p className="text-sm leading-7 text-muted-foreground">{sponsor.description || "Sponsor profile"}</p>
+                      <div className="space-y-2 border-t border-sand-100 p-5">
+                        <h3 className="font-display text-h3 text-foreground transition-colors group-hover:text-forest-700">
+                          {sponsor.name}
+                        </h3>
+                        <p className="line-clamp-3 text-sm leading-7 text-muted-foreground">
+                          {sponsor.description || "Sponsor profile"}
+                        </p>
                       </div>
                     </Link>
                   ))}
