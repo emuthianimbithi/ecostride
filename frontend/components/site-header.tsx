@@ -9,7 +9,6 @@ import { EcoStrideLogo } from "./ecostride-logo"
 const navLinks = [
   { label: "Events", href: "/events" },
   { label: "Results", href: "/results" },
-  { label: "Support", href: "/support" },
   { label: "Blog", href: "/blog" },
   { label: "Sponsors", href: "/sponsors" },
   { label: "Volunteers", href: "/volunteers" },
@@ -106,13 +105,6 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
               >
                 Register now
-              </Link>
-              <Link
-                href="/support"
-                className="button-lift rounded-full border border-sand-300 px-5 py-2 text-center text-sm font-semibold text-foreground"
-                onClick={() => setOpen(false)}
-              >
-                Donate
               </Link>
             </div>
           </div>

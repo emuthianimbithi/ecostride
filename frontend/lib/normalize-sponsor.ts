@@ -18,8 +18,8 @@ export type NormalizedSponsor = {
 }
 
 export function normalizeSponsor(raw: any): NormalizedSponsor {
-    const slug = String(raw?.slug ?? "")
-    const url_slug = String(raw?.url_slug ?? raw?.URLSlug ?? slug)
+    const slug = String(raw?.slug ?? raw?.Slug ?? "")
+    const url_slug = String(raw?.url_slug ?? raw?.URLSlug ?? raw?.urlSlug ?? slug).trim()
     const name = String(raw?.name ?? raw?.Name ?? "")
     const website_url = raw?.website_url ?? raw?.websiteUrl ?? null
     const description = raw?.description ?? raw?.Description ?? null
@@ -29,19 +29,27 @@ export function normalizeSponsor(raw: any): NormalizedSponsor {
     // Tier info
     const tierRaw = raw?.tier ?? raw?.Tier ?? {}
     const tier = {
-        name: tierRaw?.name ?? tierRaw?.Name ?? null,
-        priority: typeof tierRaw?.priority === "number" ? tierRaw.priority : null,
-        slug: tierRaw?.slug ?? null
+        name: tierRaw?.name ?? tierRaw?.Name ?? raw?.tier_name ?? raw?.TierName ?? null,
+        priority: typeof tierRaw?.priority === "number"
+            ? tierRaw.priority
+            : typeof raw?.tier_priority === "number"
+                ? raw.tier_priority
+                : typeof raw?.TierPriority === "number"
+                    ? raw.TierPriority
+                    : null,
+        slug: tierRaw?.slug ?? tierRaw?.Slug ?? raw?.tier_slug ?? raw?.TierSlug ?? null
     }
 
     // Logo info
     const logoRaw = raw?.logo ?? raw?.Logo ?? {}
     const logo = {
-        url: logoRaw?.url ?? logoRaw?.URL ?? null,
-        alt: logoRaw?.alt ?? logoRaw?.Alt ?? name,
+        url: logoRaw?.url ?? logoRaw?.URL ?? raw?.logo_url ?? raw?.LogoURL ?? null,
+        alt: logoRaw?.alt ?? logoRaw?.Alt ?? raw?.logo_alt ?? raw?.LogoAlt ?? name,
         media_id: typeof logoRaw?.media_id === "number" || typeof logoRaw?.mediaId === "number"
             ? (logoRaw?.media_id ?? logoRaw?.mediaId)
-            : null
+            : typeof raw?.logo_media_id === "number" || typeof raw?.LogoMediaID === "number"
+                ? (raw?.logo_media_id ?? raw?.LogoMediaID)
+                : null
     }
 
     // Placements

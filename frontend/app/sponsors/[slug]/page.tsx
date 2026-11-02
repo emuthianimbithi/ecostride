@@ -22,7 +22,10 @@ export default async function Page({ params }: PageProps) {
     sponsors = []
   }
 
-  const sponsor = sponsors.map(normalizeSponsor).find((item) => item.url_slug === slug)
+  const normalizedSlug = slug.trim().toLowerCase()
+  const sponsor = sponsors
+    .map(normalizeSponsor)
+    .find((item) => item.url_slug.trim().toLowerCase() === normalizedSlug)
   if (!sponsor) {
     return (
       <main className="px-6 py-12 md:py-16">
@@ -79,12 +82,6 @@ export default async function Page({ params }: PageProps) {
             <div className="space-y-3 border-t border-sand-200 pt-4">
               <h2 className="font-display text-h2 text-foreground">Support their impact</h2>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  className="button-lift inline-flex h-11 items-center justify-center rounded-full bg-sand-300 px-5 text-sm font-semibold text-forest-900 hover:bg-sand-200"
-                  href="/support"
-                >
-                  Donate to EcoStride
-                </Link>
                 <Link
                   className="button-lift inline-flex h-11 items-center justify-center rounded-full border border-sand-300 px-5 text-sm font-semibold text-foreground hover:bg-sand-100"
                   href="/events"

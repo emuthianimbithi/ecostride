@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { apiFetch, apiGet, apiPost, apiPut } from "../../../lib/api-client"
 import { useToast } from "../../../components/toast"
@@ -270,7 +271,7 @@ export default function SponsorsPage() {
             setSponsorForm((prev) => ({
                 ...prev,
                 logoMediaId: media.ID,
-                logoUrl: media.URL || media.Path || ""
+                logoUrl: media.url || media.URL || media.path || media.Path || ""
             }))
             setStatus("Logo uploaded")
         } catch (err) {
@@ -761,8 +762,25 @@ export default function SponsorsPage() {
                     {formattedSponsors.map((sponsor) => (
                         <tr key={sponsor.Slug} className="border-t border-slate-100">
                             <td className="px-4 py-3">
-                                <div className="font-medium text-slate-800">{sponsor.Name}</div>
-                                <div className="text-xs text-slate-500">{sponsor.URLSlug}</div>
+                                <div className="flex items-center gap-3">
+                                    {sponsor.LogoURL ? (
+                                        <Image
+                                            src={sponsor.LogoURL}
+                                            alt={sponsor.LogoAlt || sponsor.Name}
+                                            width={48}
+                                            height={48}
+                                            className="h-12 w-12 rounded border border-slate-100 bg-white object-contain p-1"
+                                        />
+                                    ) : (
+                                        <div className="flex h-12 w-12 items-center justify-center rounded border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500">
+                                            {sponsor.Name.slice(0, 2).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div className="font-medium text-slate-800">{sponsor.Name}</div>
+                                        <div className="text-xs text-slate-500">{sponsor.URLSlug}</div>
+                                    </div>
+                                </div>
                             </td>
                             <td className="px-4 py-3 text-slate-600">{sponsor.TierName}</td>
                             <td className="px-4 py-3 text-xs text-slate-600">{sponsor.placementsLabel || "No placements"}</td>
