@@ -1,5 +1,9 @@
 # Payments
 
+## Checkout policy (2026-11-06)
+
+New customer payments use **PesaPal only**, including event registration, merchandise and support. Event checkout defaults/restores to PesaPal and KES; unavailable PesaPal blocks paid signup before creating an entry. Legacy registration and shop Stripe/direct M-Pesa initiation routes return HTTP 410 without creating attempts or contacting those providers. Their historical webhook/status/refund code remains for existing records. Older provider-specific sections below describe retained historical implementation, not available checkout options. M-Pesa may still be offered inside PesaPal's own hosted checkout, depending on the merchant account.
+
 ## Canonical status enum (frontend/backend contract)
 
 All payment responses use one of these lowercase statuses:

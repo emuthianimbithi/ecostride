@@ -51,9 +51,9 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.GET("/payments/pesapal/callback", RateLimit("public.pesapal.callback", 20, time.Minute), handlers.Payments.PesaPalNotification)
 	api.GET("/webhooks/pesapal", RateLimit("pesapal.ipn", 120, time.Minute), handlers.Payments.PesaPalNotification)
 	api.POST("/webhooks/pesapal", RateLimit("pesapal.ipn", 120, time.Minute), handlers.Payments.PesaPalNotification)
-	public.POST("/payments/stripe/checkout", RateLimit("public.payments.stripe", 5, time.Minute), handlers.Payments.StripeCheckout)
+	public.POST("/payments/stripe/checkout", RateLimit("public.payments.stripe", 5, time.Minute), legacyCheckoutUnavailable)
 	api.POST("/webhooks/stripe", handlers.Payments.StripeWebhook)
-	public.POST("/payments/mpesa/stk", RateLimit("public.payments.mpesa", 5, time.Minute), handlers.Payments.MpesaSTK)
+	public.POST("/payments/mpesa/stk", RateLimit("public.payments.mpesa", 5, time.Minute), legacyCheckoutUnavailable)
 	api.POST("/webhooks/mpesa", handlers.Payments.MpesaWebhook)
 	public.GET("/payments/:id/status", handlers.Payments.PaymentStatus)
 
@@ -69,8 +69,8 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.GET("/shop/products", handlers.Shop.ListPublicProducts)
 	public.GET("/shop/:slug", handlers.Shop.GetOrderBySlug)
 	public.POST("/shop/orders", RateLimit("public.shop.orders", 10, time.Minute), handlers.Shop.CreateOrder)
-	public.POST("/shop/orders/:id/pay/stripe", RateLimit("public.shop.pay.stripe", 5, time.Minute), handlers.Shop.PayOrderStripe)
-	public.POST("/shop/orders/:id/pay/mpesa", RateLimit("public.shop.pay.mpesa", 5, time.Minute), handlers.Shop.PayOrderMpesa)
+	public.POST("/shop/orders/:id/pay/stripe", RateLimit("public.shop.pay.stripe", 5, time.Minute), legacyCheckoutUnavailable)
+	public.POST("/shop/orders/:id/pay/mpesa", RateLimit("public.shop.pay.mpesa", 5, time.Minute), legacyCheckoutUnavailable)
 
 	// Admin
 	admin := api.Group("/admin")
@@ -202,4 +202,9 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 
 func notImplemented(c *gin.Context) {
 	c.AbortWithStatus(http.StatusNotImplemented)
+}
+
+// Keep a clear response for stale clients without starting another provider's charge.
+func legacyCheckoutUnavailable(c *gin.Context) {
+	c.JSON(http.StatusGone, gin.H{"error": gin.H{"code": "PAYMENT_PROVIDER_DISABLED", "message": "Use PesaPal checkout; this payment method is no longer available"}})
 }

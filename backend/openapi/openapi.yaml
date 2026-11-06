@@ -290,24 +290,12 @@ paths:
         "500": { description: Verification or processing failed; safe for provider retry }
   /public/payments/stripe/checkout:
     post:
-      summary: Create Stripe checkout session
-      description: A matching key reuses the saved attempt. Changed requests or another pending/settled attempt return 409. A submission with unknown outcome stays pending and must be reconciled before a new charge.
-      parameters:
-        - in: header
-          name: X-Idempotency-Key
-          required: true
-          schema: { type: string, minLength: 1, maxLength: 200 }
+      summary: Retired checkout method
+      deprecated: true
+      description: New payments use PesaPal only. This route does not create an attempt or contact a payment provider.
       tags: [Public Payments]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { type: object }
       responses:
-        "200": { description: Created or replayed attempt }
-        "202": { description: Existing attempt has no provider result yet; poll payment status, do not resubmit }
-        "400": { description: Missing idempotency key or invalid target }
-        "409": { description: Key/request mismatch or another attempt is pending or settled }
+        "410": { description: Payment provider disabled; use PesaPal }
   /webhooks/stripe:
     post:
       summary: Stripe webhook
@@ -316,24 +304,12 @@ paths:
         "200": { description: OK }
   /public/payments/mpesa/stk:
     post:
-      summary: Initiate M-Pesa STK push
-      description: A matching key reuses the saved attempt. Changed requests or another pending/settled attempt return 409. A submission with unknown outcome stays pending and must be reconciled before a new charge.
-      parameters:
-        - in: header
-          name: X-Idempotency-Key
-          required: true
-          schema: { type: string, minLength: 1, maxLength: 200 }
+      summary: Retired checkout method
+      deprecated: true
+      description: New payments use PesaPal only. This route does not create an attempt or contact a payment provider.
       tags: [Public Payments]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { type: object }
       responses:
-        "200": { description: Created or replayed attempt }
-        "202": { description: Existing attempt has no provider result yet; poll payment status, do not resubmit }
-        "400": { description: Missing idempotency key or invalid target }
-        "409": { description: Key/request mismatch or another attempt is pending or settled }
+        "410": { description: Payment provider disabled; use PesaPal }
   /webhooks/mpesa:
     post:
       summary: M-Pesa webhook
@@ -439,26 +415,24 @@ paths:
         "409": { description: Key mismatch, stock unavailable or price changed }
   /public/shop/orders/{id}/pay/stripe:
     post:
-      summary: Pay order with Stripe
-      tags: [Public Shop]
+      summary: Retired checkout method
+      deprecated: true
+      description: New payments use PesaPal only. This route does not create an attempt or contact a payment provider.
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      tags: [Public Payments]
       responses:
-        "200": { description: OK }
+        "410": { description: Payment provider disabled; use PesaPal }
   /public/shop/orders/{id}/pay/mpesa:
     post:
-      summary: Pay order with M-Pesa
-      tags: [Public Shop]
+      summary: Retired checkout method
+      deprecated: true
+      description: New payments use PesaPal only. This route does not create an attempt or contact a payment provider.
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      tags: [Public Payments]
       responses:
-        "200": { description: OK }
+        "410": { description: Payment provider disabled; use PesaPal }
   /admin/pages:
     get:
       summary: List pages

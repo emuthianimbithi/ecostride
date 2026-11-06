@@ -79,21 +79,8 @@ const registrationSchema = z
         experience: z.string().optional(),
         extras: z.string().optional(),
         waiverAccepted: z.boolean().refine((value) => value, "Waiver acceptance required"),
-        paymentMethod: z.enum(["stripe", "mpesa", "pesapal"]).optional(),
-        currency: z.enum(["KES", "USD", "EUR"]).optional(),
-        mpesaPhone: z.string().optional()
-    })
-    .superRefine((vals, ctx) => {
-        if (vals.paymentMethod === "mpesa") {
-            const phone = (vals.mpesaPhone || "").trim()
-            if (!phone) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    path: ["mpesaPhone"],
-                    message: "M-Pesa phone is required"
-                })
-            }
-        }
+        paymentMethod: z.literal("pesapal").optional(),
+        currency: z.literal("KES").optional()
     })
 
 type RegistrationForm = z.infer<typeof registrationSchema>
@@ -204,7 +191,7 @@ export default function Page() {
             email: "",
             phone: "",
             currency: "KES",
-            paymentMethod: "stripe",
+            paymentMethod: "pesapal",
             waiverAccepted: false
         },
         mode: "onTouched"
@@ -228,7 +215,7 @@ export default function Page() {
             ],
             ["medicalDeclaration", "experience", "extras"],
             ["waiverAccepted"],
-            ["paymentMethod", "currency", "mpesaPhone"]
+            ["paymentMethod", "currency"]
         ],
         []
     )
@@ -242,7 +229,7 @@ export default function Page() {
             email: "",
             phone: "",
             currency: "KES",
-            paymentMethod: "stripe",
+            paymentMethod: "pesapal",
             waiverAccepted: false
         })
         setFieldValues({})
@@ -299,12 +286,8 @@ export default function Page() {
                         experience: String(draft.form_values.experience ?? ""),
                         extras: String(draft.form_values.extras ?? ""),
                         waiverAccepted: false,
-                        paymentMethod: draft.form_values.paymentMethod === "pesapal" ? "pesapal" : draft.form_values.paymentMethod === "mpesa" ? "mpesa" : "stripe",
-                        currency:
-                            draft.form_values.currency === "USD" || draft.form_values.currency === "EUR"
-                                ? (draft.form_values.currency as "USD" | "EUR")
-                                : "KES",
-                        mpesaPhone: String(draft.form_values.mpesaPhone ?? "")
+                        paymentMethod: "pesapal",
+                        currency: "KES"
                     })
                     setFieldValues(draft.field_values ?? {})
                     setStep(Math.max(0, Math.min(Number(draft.step ?? 0), steps.length - 1)))
@@ -445,23 +428,8 @@ export default function Page() {
 
             // Validate payment inputs only if payable
             if (isPayable) {
-                if (!values.paymentMethod) {
-                    form.setError("paymentMethod", { type: "manual", message: "Select a payment method" })
-                    setStatus(null)
-                    return
-                }
-                if (values.paymentMethod === "pesapal" && currency !== "KES") {
-                    form.setError("currency", { type: "manual", message: "PesaPal checkout currently supports KES" })
-                    setStatus(null)
-                    return
-                }
-                if (values.paymentMethod === "mpesa" && currency !== "KES") {
-                    form.setError("currency", { type: "manual", message: "M-Pesa only supports KES" })
-                    setStatus(null)
-                    return
-                }
-                if (values.paymentMethod === "mpesa" && !String(values.mpesaPhone || values.phone || "").trim()) {
-                    form.setError("mpesaPhone", { type: "manual", message: "M-Pesa phone is required" })
+                if (!pesaPalEnabled) {
+                    form.setError("paymentMethod", { type: "manual", message: "Online payments are temporarily unavailable. Please try again later." })
                     setStatus(null)
                     return
                 }
@@ -526,40 +494,14 @@ export default function Page() {
                 return
             }
 
-            if (values.paymentMethod === "pesapal") {
-                if (currency !== "KES") throw new Error("PesaPal checkout currently supports KES. Select KES to continue.")
-                setStatus("Opening PesaPal checkout...")
-                const payment = await apiPost<{ checkout_url?: string; payment_id: string }>(
-                    "/public/payments/pesapal/checkout",
-                    { registration_slug: regSlug, currency },
-                    { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
-                )
-                if (payment.checkout_url) window.location.href = payment.checkout_url
-                else router.push(`/payment/${payment.payment_id}`)
-                return
-            }
-
-            // Otherwise payable + not confirmed => pay
-            if (values.paymentMethod === "stripe") {
-                setStatus("Redirecting to Stripe...")
-                const data = await apiPost<{ checkout_url?: string; payment_id: string }>(
-                    "/public/payments/stripe/checkout",
-                    { registration_slug: regSlug, currency },
-                    { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
-                )
-                if (data.checkout_url) window.location.href = data.checkout_url
-                else router.push(`/payment/${data.payment_id}`)
-                return
-            }
-
-            setStatus("Triggering M-Pesa STK...")
-            const mpesaPhone = String(values.mpesaPhone || values.phone || "").trim()
-            const payment = await apiPost<{ payment_id: string }>(
-                "/public/payments/mpesa/stk",
-                { registration_slug: regSlug, phone: mpesaPhone },
+            setStatus("Opening PesaPal checkout...")
+            const payment = await apiPost<{ checkout_url?: string; payment_id: string }>(
+                "/public/payments/pesapal/checkout",
+                { registration_slug: regSlug, currency: "KES" },
                 { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
             )
-            router.push(`/payment/${payment.payment_id}`)
+            if (payment.checkout_url) window.location.href = payment.checkout_url
+            else router.push(`/payment/${payment.payment_id}`)
         } catch (err) {
             toastApiError(toast, err)
             setStatus(null)
@@ -807,13 +749,7 @@ export default function Page() {
                         <div className="space-y-4">
                             {(() => {
                                 const selectedCategory = categories.find((category) => category.slug === form.watch("categorySlug"))
-                                const currency = form.watch("currency") || "KES"
-                                const priceMinor =
-                                    currency === "USD"
-                                        ? selectedCategory?.price_usd_minor ?? 0
-                                        : currency === "EUR"
-                                            ? selectedCategory?.price_eur_minor ?? 0
-                                            : selectedCategory?.price_kes_minor ?? 0
+                                const priceMinor = selectedCategory?.price_kes_minor ?? 0
                                 const isFree = categories.length === 0 || priceMinor === 0
 
                                 if (isFree) {
@@ -832,63 +768,12 @@ export default function Page() {
                                                     <input type="radio" value="pesapal" {...form.register("paymentMethod")} />
                                                     <span><span className="block font-semibold">PesaPal</span><span className="text-xs text-muted-foreground">Pay securely using the options available at checkout · KES</span></span>
                                                 </label>}
-                                                <label
-                                                    className={cx(
-                                                        "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition",
-                                                        form.watch("paymentMethod") === "stripe"
-                                                            ? "border-primary bg-primary/5"
-                                                            : "border-border/70 bg-background",
-                                                        form.formState.errors.paymentMethod && "border-destructive/50"
-                                                    )}
-                                                >
-                                                    <input className="sr-only" type="radio" value="stripe" {...form.register("paymentMethod")} />
-                                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-tide-100 text-xs font-semibold text-tide-700">
-                                                        STR
-                                                    </span>
-                                                    <span className="space-y-0.5">
-                                                        <span className="block font-semibold text-foreground">Stripe</span>
-                                                        <span className="block text-xs text-muted-foreground">Card / wallet checkout</span>
-                                                    </span>
-                                                </label>
-                                                <label
-                                                    className={cx(
-                                                        "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition",
-                                                        form.watch("paymentMethod") === "mpesa"
-                                                            ? "border-primary bg-primary/5"
-                                                            : "border-border/70 bg-background",
-                                                        form.formState.errors.paymentMethod && "border-destructive/50"
-                                                    )}
-                                                >
-                                                    <input className="sr-only" type="radio" value="mpesa" {...form.register("paymentMethod")} />
-                                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-forest-100 text-xs font-semibold text-forest-700">
-                                                        MP
-                                                    </span>
-                                                    <span className="space-y-0.5">
-                                                        <span className="block font-semibold text-foreground">M-Pesa</span>
-                                                        <span className="block text-xs text-muted-foreground">STK push on mobile</span>
-                                                    </span>
-                                                </label>
                                             </div>
                                             {form.formState.errors.paymentMethod && <p className={errorText}>{form.formState.errors.paymentMethod.message}</p>}
                                         </div>
 
-                                        <FloatingSelect
-                                            label="Currency"
-                                            error={form.formState.errors.currency?.message}
-                                            {...form.register("currency")}
-                                        >
-                                                <option value="KES">KES</option>
-                                                <option value="USD">USD</option>
-                                                <option value="EUR">EUR</option>
-                                        </FloatingSelect>
-
-                                        {form.watch("paymentMethod") === "mpesa" && (
-                                            <FloatingInput
-                                                label="M-Pesa phone"
-                                                error={form.formState.errors.mpesaPhone?.message}
-                                                {...form.register("mpesaPhone")}
-                                            />
-                                        )}
+                                        <p className="text-sm text-muted-foreground">Payments are collected in KES through PesaPal.</p>
+                                        {!pesaPalEnabled && <p className={errorText}>Online payments are temporarily unavailable. Please try again later.</p>}
                                     </>
                                 )
                             })()}
