@@ -24,9 +24,27 @@ func SendRich(cfg config.Config, to, subject, textBody, htmlBody string) error {
 }
 
 func SendRichContext(ctx context.Context, cfg config.Config, to, subject, textBody, htmlBody string) error {
+	return SendMessage(ctx, cfg, to, Message{Subject: subject, Text: textBody, HTML: htmlBody})
+}
+
+type Attachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type,omitempty"`
+	Content     []byte `json:"content"`
+}
+type Message struct {
+	Subject, Text, HTML string
+	Attachments         []Attachment
+}
+
+func SendMessage(ctx context.Context, cfg config.Config, to string, message Message) error {
+	subject, textBody, htmlBody := message.Subject, message.Text, message.HTML
+	if strings.ContainsAny(to+subject, "\r\n") {
+		return fmt.Errorf("invalid email headers")
+	}
 	switch cfg.EmailProvider {
 	case "resend":
-		return sendResend(ctx, cfg, to, subject, textBody, htmlBody, "https://api.resend.com/emails", resendHTTP)
+		return sendResend(ctx, cfg, to, subject, textBody, htmlBody, "https://api.resend.com/emails", resendHTTP, message.Attachments...)
 	case "smtp":
 		if cfg.SMTPHost == "" || cfg.SMTPUser == "" {
 			return fmt.Errorf("smtp not configured")
@@ -45,6 +63,9 @@ func SendRichContext(ctx context.Context, cfg config.Config, to, subject, textBo
 			from = cfg.SMTPUser
 		}
 		msg, err := buildMessage(from, to, subject, textBody, htmlBody)
+		if err == nil && len(message.Attachments) > 0 {
+			msg, err = attachFiles(msg, message.Attachments)
+		}
 		if err != nil {
 			return err
 		}

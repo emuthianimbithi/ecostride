@@ -205,6 +205,7 @@ paths:
   /public/registrations/{id}/confirmation.pdf:
     get:
       summary: Download confirmation PDF
+      description: UUID-capability download for a confirmed/paid eligible entry. Paid categories require a saved successful payment. Pending/cancelled/refunded entries cannot download a race ticket.
       tags: [Public Registration]
       parameters:
         - in: path
@@ -219,6 +220,23 @@ paths:
               schema:
                 type: string
                 format: binary
+        "409": { description: Entry is not eligible for a race ticket }
+  /public/registrations/{id}/calendar.ics:
+    get:
+      summary: Download race-day calendar event
+      description: Requires the same confirmed/paid eligibility as the race ticket, plus a configured event date. Uses the event's exact instant in UTC, a stable registration UID and a one-day display reminder. Adding/enabling reminders is controlled by the recipient's calendar app. Private/no-store response.
+      tags: [Public Registration]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: iCalendar download
+          content:
+            text/calendar:
+              schema: { type: string }
+        "400": { description: Invalid registration ID }
+        "404": { description: Registration not found }
+        "409": { description: Ineligible entry or missing event date }
   /public/payments/providers:
     get:
       summary: Read PesaPal checkout availability

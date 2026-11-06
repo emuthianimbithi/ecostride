@@ -45,7 +45,7 @@ func TestResendSimulation(t *testing.T) {
 	cfg := config.Config{EmailProvider: "resend", ResendAPIKey: "fixture-key", ResendFrom: "EcoStride <receipts@example.com>"}
 	ctx := WithIdempotencyKey(context.Background(), "job-original")
 	for i := 0; i < 2; i++ {
-		if err := sendResend(ctx, cfg, "buyer@example.com", "Receipt", "Receipt details", "<p>Receipt details</p>", base+"/emails", client); err != nil {
+		if err := sendResend(ctx, cfg, "buyer@example.com", "Receipt", "Receipt details", "<p>Receipt details</p>", base+"/emails", client, Attachment{Filename: "race-day.ics", ContentType: "text/calendar", Content: []byte("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")}); err != nil {
 			t.Fatal(err)
 		}
 	}

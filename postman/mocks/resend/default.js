@@ -12,6 +12,7 @@ http.createServer(async (req, res) => {
     if (req.headers.authorization !== "Bearer fixture-key") return reply(401, {});
     const body = req.body || {};
     if (!body.from || !Array.isArray(body.to) || body.to.length !== 1 || !body.subject || !body.text) return reply(422, {});
+    if (body.attachments && (!Array.isArray(body.attachments) || body.attachments.some(file => !file.filename || !file.content_type || typeof file.content !== "string" || !Buffer.from(file.content, "base64").length))) return reply(422, {});
     state.requests++; await pm.state.set("resend.fixture", state);
     if (body.subject === "rate-limit") return reply(429, {});
     if (body.subject === "unavailable") return reply(503, {});

@@ -35,8 +35,12 @@ func TestPublicRegistrationSecurity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/registrations", h.CreatePublicRegistration)
-	request := func(email string, accepted bool, waiverSlug string) *httptest.ResponseRecorder {
-		body, _ := json.Marshal(map[string]interface{}{"event_slug": event.URLSlug, "athlete_name": "Runner", "email": email, "phone": "254700000001", "waiver_accepted": accepted, "waiver_slug": waiverSlug})
+	request := func(email string, accepted bool, waiverSlug string, categorySlugs ...string) *httptest.ResponseRecorder {
+		payload := map[string]interface{}{"event_slug": event.URLSlug, "athlete_name": "Runner", "email": email, "phone": "254700000001", "waiver_accepted": accepted, "waiver_slug": waiverSlug}
+		if len(categorySlugs) > 0 {
+			payload["category_slug"] = categorySlugs[0]
+		}
+		body, _ := json.Marshal(payload)
 		req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -111,6 +115,14 @@ func TestPublicRegistrationSecurity(t *testing.T) {
 	rec = request("other@example.com", true, waiver.Slug.String())
 	if rec.Code != 400 {
 		t.Fatalf("category bypass: %d %s", rec.Code, rec.Body)
+	}
+	rec = request("paid-entry@example.com", true, waiver.Slug.String(), category.Slug.String())
+	if rec.Code != 201 {
+		t.Fatalf("paid signup: %d %s", rec.Code, rec.Body)
+	}
+	db.Model(&models.Job{}).Where("type = ?", "registration.confirmation").Count(&count)
+	if count != 1 {
+		t.Fatalf("pending paid signup queued email: %d jobs; only the earlier free entry should queue", count)
 	}
 }
 

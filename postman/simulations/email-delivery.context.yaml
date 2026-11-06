@@ -6,7 +6,7 @@ assumptions:
     status: supported
     claim: The email client requires HTTP success and a nonempty message ID before reporting acceptance.
     reason: Derived from the official send-email response contract; merchant sender configuration is not verified.
-    verification: TestResendSimulation passed on 2026-11-06 against the local HTTP simulation. Eight send calls produced two accepted messages; replay reused acceptance and error/malformed responses failed. No real email was sent.
+    verification: TestResendSimulation passed on 2026-11-06 against the local HTTP simulation. Eight send calls produced two accepted messages; replay reused acceptance and error/malformed responses failed. The matching replay included a base64 calendar attachment validated by the fixture. No real email was sent.
     source: https://resend.com/docs/api-reference/emails/send-email
     updated_at: "2026-11-06"
   - id: retries

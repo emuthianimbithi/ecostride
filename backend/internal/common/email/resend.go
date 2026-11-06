@@ -41,7 +41,7 @@ func ValidateConfig(cfg config.Config) error {
 	}
 }
 
-func sendResend(ctx context.Context, cfg config.Config, to, subject, textBody, htmlBody, endpoint string, client *http.Client) error {
+func sendResend(ctx context.Context, cfg config.Config, to, subject, textBody, htmlBody, endpoint string, client *http.Client, attachments ...Attachment) error {
 	if cfg.ResendAPIKey == "" || cfg.ResendFrom == "" {
 		return fmt.Errorf("Resend requires RESEND_API_KEY and RESEND_FROM")
 	}
@@ -58,6 +58,9 @@ func sendResend(ctx context.Context, cfg config.Config, to, subject, textBody, h
 	body := map[string]interface{}{"from": cfg.ResendFrom, "to": []string{recipient.Address}, "subject": subject, "text": textBody}
 	if htmlBody != "" {
 		body["html"] = htmlBody
+	}
+	if len(attachments) > 0 {
+		body["attachments"] = attachments
 	}
 	data, err := json.Marshal(body)
 	if err != nil {

@@ -44,6 +44,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.POST("/registrations", RateLimit("public.registration", 10, time.Minute), handlers.Registrations.CreatePublicRegistration)
 	public.GET("/registrations/:id", handlers.Registrations.GetPublicRegistration)
 	public.GET("/registrations/:id/confirmation.pdf", handlers.Registrations.GetPublicConfirmationPDF)
+	public.GET("/registrations/:id/calendar.ics", RateLimit("public.registration.calendar", 30, time.Minute), handlers.Registrations.DownloadCalendar)
 
 	// Public payments
 	public.GET("/payments/providers", handlers.Payments.PaymentProviders)

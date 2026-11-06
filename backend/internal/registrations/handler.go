@@ -16,9 +16,9 @@ import (
 	"ecostride/backend/internal/auth"
 	"ecostride/backend/internal/common/config"
 	"ecostride/backend/internal/common/models"
-	"ecostride/backend/internal/common/pdf"
 	"ecostride/backend/internal/jobs"
 	"ecostride/backend/internal/receipts"
+	"ecostride/backend/internal/tickets"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -255,10 +255,10 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 		return
 	}
 
-	if h.Jobs != nil {
+	if created.Status == "confirmed" && h.Jobs != nil {
 		payload := registrationJobPayload{RegistrationID: created.ID}
 		_, _ = h.Jobs.Enqueue(c.Request.Context(), "registration.confirmation", payload, time.Now())
-	} else {
+	} else if created.Status == "confirmed" {
 		_ = SendConfirmationEmail(c.Request.Context(), h.Config, h.DB, created.ID)
 	}
 
@@ -315,25 +315,17 @@ func (h *Handler) GetPublicConfirmationPDF(c *gin.Context) {
 		return
 	}
 
-	var event models.Event
-	if err := h.DB.WithContext(c.Request.Context()).Where("id = ?", registration.EventID).First(&event).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "event not found"})
-		return
-	}
-
-	var category *models.EventCategory
-	if registration.CategoryID != nil {
-		var cat models.EventCategory
-		if err := h.DB.WithContext(c.Request.Context()).Where("id = ?", *registration.CategoryID).First(&cat).Error; err == nil {
-			category = &cat
-		}
-	}
-
-	pdfBytes, err := buildConfirmationPDF(registration, event, category)
+	ticket, err := tickets.Load(c.Request.Context(), h.DB, registration.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build pdf"})
+		c.JSON(500, gin.H{"error": "failed to load ticket"})
 		return
 	}
+	if !ticket.Eligible {
+		c.JSON(409, gin.H{"error": "ticket requires a confirmed eligible entry"})
+		return
+	}
+
+	pdfBytes := tickets.PDF(ticket)
 
 	filename := fmt.Sprintf("registration-%s.pdf", registration.Slug.String())
 	c.Header("Content-Disposition", "attachment; filename="+filename)
@@ -873,21 +865,4 @@ func optionalString(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func buildConfirmationPDF(registration models.Registration, event models.Event, category *models.EventCategory) ([]byte, error) {
-	lines := []string{
-		"EcoStride Registration Confirmation",
-		fmt.Sprintf("Event: %s", event.Title),
-		fmt.Sprintf("Date: %s", event.StartAt.Format("2006-01-02 15:04")),
-		fmt.Sprintf("Athlete: %s", registration.AthleteName),
-		fmt.Sprintf("Email: %s", registration.Email),
-		fmt.Sprintf("Status: %s", registration.Status),
-		fmt.Sprintf("Confirmation Code: %s", registration.Slug.String()),
-	}
-	if category != nil {
-		lines = append(lines, fmt.Sprintf("Category: %s", category.Name))
-	}
-
-	return pdf.BuildSimplePDF(lines), nil
 }

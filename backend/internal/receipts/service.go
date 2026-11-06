@@ -101,13 +101,14 @@ type ReceiptJobPayload struct {
 }
 
 func (s *Service) SendReceiptEmail(ctx context.Context, receipt models.Receipt, payment models.Payment, to string) error {
-	details := s.buildReceiptDetails(ctx, receipt, payment)
-	subject := "EcoStride receipt " + receipt.ReceiptNumber
-	body := strings.Join(details.emailLines, "\n")
-	if s.Config.BaseURL != "" {
-		body += "\n\nDownload your receipt: " + strings.TrimRight(s.Config.BaseURL, "/") + "/api/v1/public/payments/" + payment.Slug.String() + "/receipt.pdf"
+	if payment.Status != "success" && payment.Status != "refunded" {
+		return nil
 	}
-	return email.SendRichContext(ctx, s.Config, to, subject, body, "")
+	message, err := s.buildEmail(ctx, receipt, payment)
+	if err != nil {
+		return err
+	}
+	return email.SendMessage(ctx, s.Config, to, message)
 }
 
 // BuildReceiptPDF supports an immediate download without waiting for the
