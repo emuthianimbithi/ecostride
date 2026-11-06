@@ -56,6 +56,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.POST("/payments/mpesa/stk", RateLimit("public.payments.mpesa", 5, time.Minute), legacyCheckoutUnavailable)
 	api.POST("/webhooks/mpesa", handlers.Payments.MpesaWebhook)
 	public.GET("/payments/:id/status", handlers.Payments.PaymentStatus)
+	public.GET("/payments/:id/receipt.pdf", RateLimit("public.receipt.download", 30, time.Minute), handlers.Payments.DownloadReceipt)
 
 	// Public results
 	public.GET("/results/events/:slug", handlers.Results.ListPublicResults)

@@ -1,0 +1,18 @@
+purpose:
+  stands_in_for: Resend transactional send email API
+  unblocks: Real Go HTTP serialization, failure and retry checks without sending email
+assumptions:
+  - id: api-acceptance
+    status: supported
+    claim: The email client requires HTTP success and a nonempty message ID before reporting acceptance.
+    reason: Derived from the official send-email response contract; merchant sender configuration is not verified.
+    verification: TestResendSimulation passed on 2026-11-06 against the local HTTP simulation. Eight send calls produced two accepted messages; replay reused acceptance and error/malformed responses failed. No real email was sent.
+    source: https://resend.com/docs/api-reference/emails/send-email
+    updated_at: "2026-11-06"
+  - id: retries
+    status: supported
+    claim: Worker retries carry a stable job idempotency key; intentional resend jobs get a new key.
+    reason: Resend retains keys for 24 hours; this prevents duplicate acceptance within that window for identical payloads, not permanent exactly-once delivery.
+    verification: TestResendSimulation passed matching replay, changed-payload conflict, separate intentional resend, HTTP 422/429/503 and missing message ID. Simulation logged the send HTTP paths. This establishes fixture behavior and client checks, not real delivery.
+    source: https://resend.com/docs/dashboard/emails/idempotency-keys; backend/cmd/api/jobs.go
+    updated_at: "2026-11-06"

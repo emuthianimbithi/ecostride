@@ -44,7 +44,7 @@ test("registration offers only PesaPal and sends accepted waiver and KES checkou
   await expect(page.getByText("Stripe", { exact: true })).toHaveCount(0)
   await expect(page.getByText("M-Pesa", { exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "Submit registration" }).click()
-  await page.waitForURL("**/payment/pesapal-test")
+  await page.waitForURL("**/payment/pesapal-test/checkout")
 })
 
 test("disabled PesaPal prevents creating an unpaid registration with a legacy fallback", async ({ page }) => {

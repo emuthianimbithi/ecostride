@@ -32,6 +32,7 @@ func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Serv
 		return shop.NewService(db).ExpireOrder(ctx, payload.OrderID)
 	})
 	jobService.Register("receipt.email", func(ctx context.Context, job models.Job) error {
+		ctx = email.WithIdempotencyKey(ctx, "ecostride-job-"+job.Slug.String())
 		var payload receipts.ReceiptJobPayload
 		if err := json.Unmarshal(job.Payload, &payload); err != nil {
 			return err
@@ -87,6 +88,7 @@ func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Serv
 	})
 
 	jobService.Register("registration.confirmation", func(ctx context.Context, job models.Job) error {
+		ctx = email.WithIdempotencyKey(ctx, "ecostride-job-"+job.Slug.String())
 		var payload struct {
 			RegistrationID uint `json:"registration_id"`
 		}

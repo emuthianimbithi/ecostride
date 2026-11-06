@@ -500,7 +500,7 @@ export default function Page() {
                 { registration_slug: regSlug, currency: "KES" },
                 { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
             )
-            if (payment.checkout_url) window.location.href = payment.checkout_url
+            if (payment.checkout_url) router.push(`/payment/${payment.payment_id}/checkout`)
             else router.push(`/payment/${payment.payment_id}`)
         } catch (err) {
             toastApiError(toast, err)

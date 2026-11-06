@@ -104,7 +104,16 @@ func (s *Service) SendReceiptEmail(ctx context.Context, receipt models.Receipt, 
 	details := s.buildReceiptDetails(ctx, receipt, payment)
 	subject := "EcoStride receipt " + receipt.ReceiptNumber
 	body := strings.Join(details.emailLines, "\n")
-	return email.Send(s.Config, to, subject, body)
+	if s.Config.BaseURL != "" {
+		body += "\n\nDownload your receipt: " + strings.TrimRight(s.Config.BaseURL, "/") + "/api/v1/public/payments/" + payment.Slug.String() + "/receipt.pdf"
+	}
+	return email.SendRichContext(ctx, s.Config, to, subject, body, "")
+}
+
+// BuildReceiptPDF supports an immediate download without waiting for the
+// background PDF-storage job. The handler checks verified payment eligibility.
+func (s *Service) BuildReceiptPDF(ctx context.Context, receipt models.Receipt, payment models.Payment) []byte {
+	return pdf.BuildSimplePDF(s.buildReceiptDetails(ctx, receipt, payment).pdfLines)
 }
 
 func (s *Service) GenerateReceiptPDF(ctx context.Context, receipt *models.Receipt, payment models.Payment) error {

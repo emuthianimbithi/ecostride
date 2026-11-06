@@ -429,11 +429,23 @@ func (h *Handler) PaymentStatus(c *gin.Context) {
 	}
 
 	var registrationSlug *string
+	payerName, description := "", ""
 	if payment.RegistrationID != nil {
 		var registration models.Registration
 		if err := h.DB.WithContext(c.Request.Context()).Where("id = ?", *payment.RegistrationID).First(&registration).Error; err == nil {
 			value := registration.Slug.String()
 			registrationSlug = &value
+			payerName = registration.AthleteName
+			var event models.Event
+			if h.DB.WithContext(c.Request.Context()).First(&event, registration.EventID).Error == nil {
+				description = event.Title
+			}
+			if registration.CategoryID != nil {
+				var category models.EventCategory
+				if h.DB.WithContext(c.Request.Context()).First(&category, *registration.CategoryID).Error == nil {
+					description += " · " + category.Name
+				}
+			}
 		}
 	}
 
@@ -443,11 +455,37 @@ func (h *Handler) PaymentStatus(c *gin.Context) {
 		if err := h.DB.WithContext(c.Request.Context()).Where("id = ?", *payment.OrderID).First(&order).Error; err == nil {
 			value := order.Slug.String()
 			orderSlug = &value
+			payerName = order.BuyerName
+			var items []models.OrderItem
+			if h.DB.WithContext(c.Request.Context()).Where("order_id = ?", order.ID).Order("id").Find(&items).Error == nil {
+				var labels []string
+				for _, item := range items {
+					labels = append(labels, fmt.Sprintf("%s × %d", item.ProductName, item.Qty))
+				}
+				description = strings.Join(labels, ", ")
+			}
 		}
 	}
 
+	checkoutURL, receiptURL := "", ""
+	if payment.Provider == "PESAPAL" && payment.Status == "pending" {
+		if candidate := extractMetadataString(payment.Metadata, "checkout_url"); validPesaPalRedirect(candidate) {
+			checkoutURL = candidate
+		}
+	}
+	if payment.Status == "success" || payment.Status == "refunded" {
+		var count int64
+		if err := h.DB.WithContext(c.Request.Context()).Model(&models.Receipt{}).Where("payment_id = ?", payment.ID).Count(&count).Error; err == nil && count > 0 {
+			receiptURL = strings.TrimRight(h.Config.BaseURL, "/") + "/api/v1/public/payments/" + payment.Slug.String() + "/receipt.pdf"
+		}
+	}
+	c.Header("Cache-Control", "private, no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"payment_id":        payment.Slug.String(),
+		"payer_name":        payerName,
+		"description":       description,
+		"checkout_url":      checkoutURL,
+		"receipt_url":       receiptURL,
 		"status":            CanonicalizePaymentStatus(payment.Status),
 		"provider":          strings.ToUpper(payment.Provider),
 		"currency":          strings.ToUpper(payment.Currency),

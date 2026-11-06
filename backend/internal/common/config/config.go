@@ -31,6 +31,8 @@ type Config struct {
 	MPesaWebhookToken     string
 	MPesaAllowedIPs       string
 	EmailProvider         string
+	ResendAPIKey          string
+	ResendFrom            string
 	SMTPHost              string
 	SMTPPort              string
 	SMTPUser              string
@@ -70,6 +72,8 @@ func Load() Config {
 		MPesaWebhookToken:     getenv("MPESA_WEBHOOK_TOKEN", ""),
 		MPesaAllowedIPs:       getenv("MPESA_ALLOWED_IPS", ""),
 		EmailProvider:         getenv("EMAIL_PROVIDER", "console"),
+		ResendAPIKey:          getenv("RESEND_API_KEY", ""),
+		ResendFrom:            getenv("RESEND_FROM", ""),
 		SMTPHost:              getenv("SMTP_HOST", ""),
 		SMTPPort:              getenv("SMTP_PORT", "587"),
 		SMTPUser:              getenv("SMTP_USER", ""),

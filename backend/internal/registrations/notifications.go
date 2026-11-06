@@ -46,5 +46,5 @@ func SendConfirmationEmail(ctx context.Context, cfg config.Config, db *gorm.DB, 
 		return err
 	}
 
-	return email.SendRich(cfg, registration.Email, subject, textBody, htmlBody)
+	return email.SendRichContext(ctx, cfg, registration.Email, subject, textBody, htmlBody)
 }

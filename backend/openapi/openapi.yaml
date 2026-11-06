@@ -319,6 +319,7 @@ paths:
   /public/payments/{id}/status:
     get:
       summary: Payment status
+      description: UUID-capability lookup with private/no-store caching. Includes payer name and event/category or item snapshot summary, a validated hosted checkout URL only while PesaPal is pending, and a receipt URL only when a successful/refunded payment has an issued receipt. Excludes email, phone and raw provider metadata.
       tags: [Public Payments]
       parameters:
         - in: path
@@ -328,6 +329,23 @@ paths:
       responses:
         "200": { description: OK }
         "404": { description: Not Found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /public/payments/{id}/receipt.pdf:
+    get:
+      summary: Download an issued payment receipt
+      description: Payment UUID is a private capability like the status page. Requires saved success/refunded status and an issued receipt; pending/failed attempts cannot download. Builds the PDF without waiting for background file storage. Private/no-store response with attachment disposition.
+      tags: [Public Payments]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Receipt download
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { description: Invalid payment UUID }
+        "404": { description: Payment or receipt not found }
+        "409": { description: Payment is not successful/refunded }
+        "503": { description: Receipt service unavailable }
   /public/results/events/{slug}:
     get:
       summary: List results

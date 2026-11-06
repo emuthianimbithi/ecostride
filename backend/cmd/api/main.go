@@ -11,6 +11,7 @@ import (
 	"ecostride/backend/internal/cms"
 	"ecostride/backend/internal/common/config"
 	"ecostride/backend/internal/common/db"
+	"ecostride/backend/internal/common/email"
 	httpserver "ecostride/backend/internal/common/http"
 	"ecostride/backend/internal/common/storage"
 	"ecostride/backend/internal/events"
@@ -37,6 +38,9 @@ func init() {
 
 func main() {
 	cfg := config.Load()
+	if err := email.ValidateConfig(cfg); err != nil {
+		log.Fatalf("email config: %v", err)
+	}
 	if err := payments.ValidatePesaPalConfig(cfg); err != nil {
 		log.Fatalf("PesaPal config: %v", err)
 	}

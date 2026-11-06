@@ -1,0 +1,12 @@
+version: 1
+id: bb0d3be1-74aa-4cbc-8509-95e18b7d4d01
+name: resend
+slug: resend
+protocol: http
+interceptRequests: true
+origin: api.resend.com
+port: 4541
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

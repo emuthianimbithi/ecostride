@@ -34,6 +34,8 @@ func (s *Service) SubmitPesaPal(ctx context.Context, payment models.Payment, dat
 	}
 	amount := json.Number(fmt.Sprintf("%d.%02d", payment.AmountMinor/100, payment.AmountMinor%100))
 	request := map[string]interface{}{"id": payment.Slug.String(), "currency": payment.Currency, "amount": amount, "description": string(description), "callback_url": strings.TrimRight(s.Config.BaseURL, "/") + "/api/v1/public/payments/pesapal/callback", "notification_id": s.Config.PesaPalNotificationID, "billing_address": billing}
+	request["redirect_mode"] = "TOP_WINDOW"
+	request["cancellation_url"] = strings.TrimRight(s.Config.PesaPalReturnURL, "/") + "/" + payment.Slug.String()
 	var result pesaPalOrder
 	err := s.PesaPal.call(ctx, "POST", "/Transactions/SubmitOrderRequest", request, &result)
 	if err == nil {

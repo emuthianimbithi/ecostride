@@ -1,0 +1,6 @@
+simulation: email-delivery
+routing: path
+mocks:
+  - name: resend
+    routeKey: resend
+    path: ../mocks/resend/config.yaml

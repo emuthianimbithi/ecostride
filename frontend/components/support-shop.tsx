@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { ArrowRight, HeartHandshake, Shirt } from "lucide-react"
 import { apiGet, apiPost } from "../lib/api-client"
@@ -11,6 +12,7 @@ import { Eyebrow } from "./eyebrow"
 import { ResponsiveMedia } from "./responsive-media"
 
 export function SupportShop({ mode }: { mode: "support" | "shop" }) {
+  const router = useRouter()
   const [products, setProducts] = useState<NormalizedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -65,7 +67,7 @@ export function SupportShop({ mode }: { mode: "support" | "shop" }) {
         await upsertOrder({ slug: current.order.slug, name: body.buyer_name, email: body.email, amount_minor: current.order.total_minor, currency: current.order.currency, status: "pending", title: selected.name }).catch(() => undefined)
       }
       const payment = await apiPost<{ payment_id: string; checkout_url?: string }>("/public/payments/pesapal/checkout", { order_slug: current.order.slug, currency: "KES" }, { headers: { "X-Idempotency-Key": `pay:${current.key}` } })
-      if (payment.checkout_url) window.location.assign(payment.checkout_url)
+      if (payment.checkout_url) router.push(`/payment/${payment.payment_id}/checkout`)
       else { setPendingPayment(payment.payment_id); setError("Your payment is awaiting confirmation. Open its status page before trying again.") }
     } catch (err) { setError(err instanceof Error ? err.message : "Checkout failed. Please try again.") }
     finally { submitting.current = false; setBusy(false) }

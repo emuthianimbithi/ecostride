@@ -125,6 +125,10 @@ func TestPesaPalSimulation(t *testing.T) {
 			if err := db.First(&payment).Error; err != nil {
 				t.Fatal(err)
 			}
+			submitted := state["orders"].(map[string]interface{})[tracking].(map[string]interface{})
+			if submitted["redirect_mode"] != "TOP_WINDOW" || submitted["cancellation_url"] != cfg.PesaPalReturnURL+"/"+payment.Slug.String() {
+				t.Fatal("hosted return/cancellation destination missing")
+			}
 			notify := func(id string) *httptest.ResponseRecorder {
 				return call("/ipn", map[string]interface{}{"OrderNotificationType": "IPNCHANGE", "OrderMerchantReference": payment.Slug.String(), "OrderTrackingId": id, "payment_status": "success"})
 			}

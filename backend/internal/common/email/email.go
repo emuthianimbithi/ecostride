@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"mime/multipart"
 	"net/smtp"
@@ -19,7 +20,13 @@ func Send(cfg config.Config, to, subject, body string) error {
 
 // SendRich delivers multipart email (text + optional HTML) using configured provider.
 func SendRich(cfg config.Config, to, subject, textBody, htmlBody string) error {
+	return SendRichContext(context.Background(), cfg, to, subject, textBody, htmlBody)
+}
+
+func SendRichContext(ctx context.Context, cfg config.Config, to, subject, textBody, htmlBody string) error {
 	switch cfg.EmailProvider {
+	case "resend":
+		return sendResend(ctx, cfg, to, subject, textBody, htmlBody, "https://api.resend.com/emails", resendHTTP)
 	case "smtp":
 		if cfg.SMTPHost == "" || cfg.SMTPUser == "" {
 			return fmt.Errorf("smtp not configured")

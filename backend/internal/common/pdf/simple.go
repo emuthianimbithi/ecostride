@@ -3,6 +3,7 @@ package pdf
 import (
 	"bytes"
 	"fmt"
+	"golang.org/x/text/encoding/charmap"
 	"strings"
 )
 
@@ -11,6 +12,7 @@ func BuildSimplePDF(lines []string) []byte {
 	content := buildPDFContent(lines)
 
 	var buf bytes.Buffer
+	buf.WriteString("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 	offsets := make([]int, 6)
 
 	writeObj := func(index int, body string) {
@@ -22,7 +24,7 @@ func BuildSimplePDF(lines []string) []byte {
 	writeObj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
 	writeObj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>")
 	writeObj(4, fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(content), content))
-	writeObj(5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+	writeObj(5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
 
 	xrefOffset := buf.Len()
 	fmt.Fprintf(&buf, "xref\n0 %d\n", len(offsets))
@@ -49,6 +51,18 @@ func buildPDFContent(lines []string) string {
 }
 
 func escapePDFText(value string) string {
+	var encoded strings.Builder
+	for _, r := range value {
+		if r == '\r' || r == '\n' || r == '\t' {
+			encoded.WriteByte(' ')
+			continue
+		}
+		if b, ok := charmap.Windows1252.EncodeRune(r); ok {
+			encoded.WriteByte(b)
+		} else {
+			encoded.WriteByte('?')
+		}
+	}
 	replacer := strings.NewReplacer("\\", "\\\\", "(", "\\(", ")", "\\)")
-	return replacer.Replace(value)
+	return replacer.Replace(encoded.String())
 }
