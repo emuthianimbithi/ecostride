@@ -18,7 +18,7 @@ func NewService(db *gorm.DB) *Service {
 }
 
 func (s *Service) CreateRegistration(ctx context.Context, registration models.Registration, consent models.ConsentRecord) (models.Registration, error) {
-	return registration, s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&registration).Error; err != nil {
 			return err
 		}
@@ -30,6 +30,7 @@ func (s *Service) CreateRegistration(ctx context.Context, registration models.Re
 
 		return nil
 	})
+	return registration, err
 }
 
 func (s *Service) GetRegistrationBySlug(ctx context.Context, slug string) (models.Registration, error) {
@@ -58,7 +59,12 @@ func (s *Service) ListRegistrations(ctx context.Context, eventID *uint, status s
 }
 
 func (s *Service) UpdateRegistration(ctx context.Context, registration models.Registration) (models.Registration, error) {
-	if err := s.DB.WithContext(ctx).Save(&registration).Error; err != nil {
+	// Update contact/race fields only. A concurrent payment or cancellation must
+	// never be overwritten by the stale status loaded by the edit form.
+	if err := s.DB.WithContext(ctx).Model(&registration).Select("athlete_name", "email", "phone", "tshirt_size", "emergency_name", "emergency_phone", "dob", "gender", "nationality", "residence", "experience").Updates(&registration).Error; err != nil {
+		return models.Registration{}, err
+	}
+	if err := s.DB.WithContext(ctx).First(&registration, registration.ID).Error; err != nil {
 		return models.Registration{}, err
 	}
 	return registration, nil
@@ -66,7 +72,7 @@ func (s *Service) UpdateRegistration(ctx context.Context, registration models.Re
 
 func (s *Service) CancelRegistration(ctx context.Context, registration models.Registration) (models.Registration, error) {
 	registration.Status = "cancelled"
-	if err := s.DB.WithContext(ctx).Save(&registration).Error; err != nil {
+	if err := s.DB.WithContext(ctx).Model(&registration).Update("status", "cancelled").Error; err != nil {
 		return models.Registration{}, err
 	}
 	return registration, nil

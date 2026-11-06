@@ -65,7 +65,7 @@ func main() {
 }
 
 func seedPermissions(dbConn *gorm.DB) map[string]models.Permission {
-	// 41 enforced permission keys (canonical set matching routes.go RequirePermission calls)
+	// Enforced permission keys (canonical set matching routes.go RequirePermission calls)
 	permissionDefs := map[string]string{
 		// CMS permissions (13)
 		"cms.page.read":         "Read CMS pages",
@@ -92,9 +92,11 @@ func seedPermissions(dbConn *gorm.DB) map[string]models.Permission {
 		"registration.read":   "Read registrations",
 		"registration.write":  "Update registrations",
 		"registration.cancel": "Cancel registrations",
-		// Payment permissions (2)
-		"payment.read":   "Read payments",
-		"payment.refund": "Refund payments",
+		// Payment permissions (4)
+		"payment.verify":         "Verify saved PesaPal payment status",
+		"payment.read":           "Read payments",
+		"payment.refund":         "Refund payments",
+		"payment.receipt.resend": "Resend saved payment receipts",
 		// Finance permissions (2)
 		"finance.reconcile.import": "Import reconciliation data",
 		"finance.export":           "Export finance data",
@@ -113,8 +115,9 @@ func seedPermissions(dbConn *gorm.DB) map[string]models.Permission {
 		"volunteer.communicate": "Communicate with volunteers",
 		"volunteer.export":      "Export volunteer data",
 		// Shop permissions (2)
-		"shop.read":  "Read shop",
-		"shop.write": "Manage shop",
+		"shop.fulfill": "Record paid merchandise collection",
+		"shop.read":    "Read shop",
+		"shop.write":   "Manage shop",
 		// Access control permissions (3)
 		"checkin.access": "Check-in access",
 		"user.manage":    "Manage users and roles",
@@ -138,7 +141,7 @@ func seedRoles(dbConn *gorm.DB, permissions map[string]models.Permission) map[st
 		"SuperAdmin": allPermissionKeys(permissions),
 		"OrgAdmin":   allPermissionKeys(permissions),
 		"Finance": {
-			"payment.read", "payment.refund",
+			"payment.read", "payment.refund", "payment.receipt.resend", "payment.verify",
 			"finance.export", "finance.reconcile.import",
 			"registration.read", "audit.read",
 		},
@@ -163,11 +166,11 @@ func seedRoles(dbConn *gorm.DB, permissions map[string]models.Permission) map[st
 			"volunteer.communicate", "volunteer.export",
 		},
 		"ShopManager": {
-			"shop.read", "shop.write",
+			"shop.read", "shop.write", "shop.fulfill",
 			"cms.media.read", "cms.media.write",
 			"payment.read",
 		},
-		"CheckInStaff": {"checkin.access", "registration.read"},
+		"CheckInStaff": {"checkin.access"},
 		"Support": {
 			"registration.read", "payment.read",
 			"cms.page.read", "cms.post.read", "cms.media.read",

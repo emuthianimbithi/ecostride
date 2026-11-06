@@ -1,0 +1,12 @@
+version: 1
+id: f8c12b9a-95a8-4502-8981-33da984fbec6
+name: pesapal
+slug: pesapal
+protocol: http
+interceptRequests: true
+origin: cybqa.pesapal.com
+port: 4521
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

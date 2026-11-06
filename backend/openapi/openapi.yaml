@@ -159,16 +159,37 @@ paths:
         "200": { description: OK }
   /public/registrations:
     post:
-      summary: Create registration
+      summary: Create registration with explicit versioned waiver acceptance
+      description: Existing entries return a conflict without disclosing participant data. Select a category when the event has categories. Deploy callers with this contract before accepting registrations.
       tags: [Public Registration]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object }
+            schema:
+              type: object
+              required: [event_slug, athlete_name, email, phone, waiver_accepted, waiver_slug]
+              properties:
+                event_slug: { type: string }
+                category_slug: { type: string, format: uuid }
+                athlete_name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                waiver_accepted: { type: boolean, enum: [true] }
+                waiver_slug: { type: string, format: uuid, description: Slug returned by the current waiver endpoint }
       responses:
-        "201": { description: Created }
-        "400": { description: Bad Request, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "201":
+          description: Created; only registration reference and status are returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slug, status]
+                properties:
+                  slug: { type: string, format: uuid }
+                  status: { type: string, enum: [pending_payment, confirmed] }
+        "409": { description: Existing registration or stale waiver; no existing participant data returned }
+        "400": { description: Invalid request or waiver acceptance missing }
   /public/registrations/{id}:
     get:
       summary: Get registration
@@ -198,9 +219,84 @@ paths:
               schema:
                 type: string
                 format: binary
+  /public/payments/providers:
+    get:
+      summary: Read PesaPal checkout availability
+      responses:
+        "200": { description: pesapal_enabled boolean, without merchant configuration }
+  /public/payments/pesapal/checkout:
+    post:
+      summary: Create or reuse a PesaPal hosted checkout
+      description: KES only. Supply exactly one target. Repeated matching keys reuse the saved attempt. Uncertain submission outcomes remain pending and are never submitted again automatically.
+      tags: [Public Payments]
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registration_slug: { type: string, format: uuid }
+                order_slug: { type: string, format: uuid }
+                currency: { type: string, enum: [KES] }
+      responses:
+        "200": { description: Saved payment_id, status and checkout_url }
+        "202": { description: Pending attempt without confirmed redirect; display local payment status }
+        "400": { description: Invalid target, currency or key }
+        "409": { description: Key conflict or existing pending or settled payment }
+        "503": { description: PesaPal disabled }
+  /public/payments/pesapal/callback:
+    get:
+      summary: Verify a PesaPal browser return and redirect to configured payment page
+      parameters:
+        - { in: query, name: OrderTrackingId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: OrderMerchantReference, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: OrderNotificationType, required: false, description: May be omitted by the hosted browser return. Payment status is always verified with PesaPal., schema: { type: string, enum: [CALLBACKURL] } }
+      responses:
+        "303": { description: Redirect to configured frontend payment page; payment can still be pending }
+        "400": { description: Invalid notification }
+        "404": { description: Unknown payment }
+  /webhooks/pesapal:
+    get:
+      summary: Receive PesaPal GET IPN and verify server-side status
+      parameters:
+        - { in: query, name: OrderTrackingId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: OrderMerchantReference, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: OrderNotificationType, required: true, schema: { type: string, enum: [IPNCHANGE] } }
+      responses:
+        "200": { description: Acknowledged verified notification with provider acknowledgment fields }
+        "500": { description: Verification or processing failed; safe for provider retry }
+    post:
+      summary: Receive PesaPal JSON IPN (maximum 4096 bytes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [OrderTrackingId, OrderMerchantReference, OrderNotificationType]
+              properties:
+                OrderTrackingId: { type: string, format: uuid }
+                OrderMerchantReference: { type: string, format: uuid }
+                OrderNotificationType: { type: string, enum: [IPNCHANGE] }
+      responses:
+        "200": { description: Verified status processed or duplicate acknowledged }
+        "400": { description: Invalid notification }
+        "500": { description: Verification or processing failed; safe for provider retry }
   /public/payments/stripe/checkout:
     post:
       summary: Create Stripe checkout session
+      description: A matching key reuses the saved attempt. Changed requests or another pending/settled attempt return 409. A submission with unknown outcome stays pending and must be reconciled before a new charge.
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
       tags: [Public Payments]
       requestBody:
         required: true
@@ -208,7 +304,10 @@ paths:
           application/json:
             schema: { type: object }
       responses:
-        "200": { description: OK }
+        "200": { description: Created or replayed attempt }
+        "202": { description: Existing attempt has no provider result yet; poll payment status, do not resubmit }
+        "400": { description: Missing idempotency key or invalid target }
+        "409": { description: Key/request mismatch or another attempt is pending or settled }
   /webhooks/stripe:
     post:
       summary: Stripe webhook
@@ -218,6 +317,12 @@ paths:
   /public/payments/mpesa/stk:
     post:
       summary: Initiate M-Pesa STK push
+      description: A matching key reuses the saved attempt. Changed requests or another pending/settled attempt return 409. A submission with unknown outcome stays pending and must be reconciled before a new charge.
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
       tags: [Public Payments]
       requestBody:
         required: true
@@ -225,7 +330,10 @@ paths:
           application/json:
             schema: { type: object }
       responses:
-        "200": { description: OK }
+        "200": { description: Created or replayed attempt }
+        "202": { description: Existing attempt has no provider result yet; poll payment status, do not resubmit }
+        "400": { description: Missing idempotency key or invalid target }
+        "409": { description: Key/request mismatch or another attempt is pending or settled }
   /webhooks/mpesa:
     post:
       summary: M-Pesa webhook
@@ -296,15 +404,39 @@ paths:
         "200": { description: OK }
   /public/shop/orders:
     post:
-      summary: Create order
+      summary: Create or replay a shop or support order
+      description: Prices and custom-amount permissions are checked by the server. Stock is reserved transactionally for 30 minutes. Repeat the same key and body to recover an uncertain response. Returns only the order reference, status, total, currency and reservation expiry.
       tags: [Public Shop]
+      parameters:
+        - { in: header, name: X-Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object }
+            schema:
+              type: object
+              required: [buyer_name, email, currency, items]
+              properties:
+                buyer_name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                currency: { type: string, enum: [KES, USD, EUR] }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [product_slug, qty]
+                    properties:
+                      product_slug: { type: string, format: uuid }
+                      qty: { type: integer, minimum: 1, maximum: 100 }
+                      custom_amount_minor: { type: integer, minimum: 1, description: Only accepted for products allowing a custom amount }
+                      meta: { type: object }
       responses:
-        "201": { description: Created }
+        "201": { description: New or matching existing order }
+        "400": { description: Missing key or invalid price, item or quantity }
+        "409": { description: Key mismatch, stock unavailable or price changed }
   /public/shop/orders/{id}/pay/stripe:
     post:
       summary: Pay order with Stripe
@@ -719,7 +851,8 @@ paths:
       responses:
         "200": { description: OK }
     put:
-      summary: Update registration
+      summary: Update registration contact and race details
+      description: Requires registration.write. Status edits are rejected with 409; payment state is provider-verified and cancellation uses its dedicated endpoint.
       tags: [Admin Registrations]
       parameters:
         - in: path
@@ -752,24 +885,104 @@ paths:
         "200": { description: OK }
   /admin/registrations/{id}/resend-receipt:
     post:
-      summary: Resend receipt
+      summary: Resend registration receipt
+      description: Requires payment.receipt.resend. Uses the payment resend workflow with the saved recipient, pending-job deduplication and transactional audit.
       tags: [Admin Registrations]
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
       responses:
-        "200": { description: OK }
+        "202": { description: Queued or existing pending delivery reused }
+        "400": { description: Reason required }
+        "403": { description: Missing permission }
+        "404": { description: Payment or receipt not found }
   /admin/payments:
     get:
       summary: List payments
       tags: [Admin Payments]
+      parameters:
+        - in: query
+          name: needs_review
+          schema: { type: boolean }
+          description: Include payments flagged for review or pending more than 15 minutes
+
       responses:
         "200": { description: OK }
+  /admin/payments/{id}:
+    get:
+      summary: Get payment and receipt delivery history
+      description: Requires payment.read. Returns up to 50 notification and 50 receipt job summaries; excludes raw payloads, request metadata and worker errors. Review flags are operational signals, not verified provider status.
+      tags: [Admin Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Payment, review flags, receipt and delivery history }
+        "401": { description: Authentication required }
+        "403": { description: Missing permission }
+        "404": { description: Payment not found }
+  /admin/payments/{id}/verify:
+    post:
+      summary: Verify a saved PesaPal tracking ID with the provider
+      description: Requires payment.verify and an audit reason. Successful verification, receipt jobs and audit commit together. Does not create a new charge.
+      tags: [Admin Payments]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { description: Verified local payment status }
+        "403": { description: Missing permission }
+        "409": { description: Missing tracking ID or unsupported provider }
+        "502": { description: Provider verification failed; current local status retained }
+  /admin/payments/{id}/resend-receipt:
+    post:
+      summary: Queue delivery of an existing receipt
+      description: Requires payment.receipt.resend. Uses the receipt's saved recipient. Concurrent requests reuse pending email delivery. Queueing and audit commit together. Limited to five requests per minute per IP per API process.
+      tags: [Admin Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "202": { description: Queued or existing pending delivery reused }
+        "400": { description: Invalid reason }
+        "401": { description: Authentication required }
+        "403": { description: Missing permission }
+        "404": { description: Payment or existing receipt not found }
+        "409": { description: Payment is not successful or refunded }
+        "429": { description: Too many requests }
   /admin/payments/{id}/refund:
     post:
       summary: Refund payment
+      description: Requires payment.refund. Only full refunds are supported; partial amounts are rejected until cumulative refund accounting is implemented.
       tags: [Admin Payments]
       parameters:
         - in: path
@@ -778,6 +991,18 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: OK }
+  /admin/orders/{id}/collect:
+    post:
+      summary: Record merchandise collection once
+      description: Requires shop.fulfill. Requires a paid order with matching successful payment and merchandise items. Collection timestamp, actor and audit commit together; retries preserve the original record. No partial collection is supported.
+      tags: [Admin Shop]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Original or newly recorded collection timestamp }
+        "403": { description: Missing permission }
+        "404": { description: Order not found }
+        "409": { description: Order is not eligible for merchandise collection }
   /admin/finance/dashboard:
     get:
       summary: Finance dashboard
@@ -826,6 +1051,7 @@ paths:
   /admin/events/{id}/bibs/auto-assign:
     post:
       summary: Auto-assign bibs
+      description: Requires bib.assign.auto. Only paid or confirmed entries with free categories or a saved successful payment are eligible; allocation is serialized per event.
       tags: [Admin Bibs]
       parameters:
         - in: path
@@ -837,17 +1063,32 @@ paths:
   /admin/events/{id}/bibs/manual-assign:
     post:
       summary: Manual assign bib
+      description: Requires bib.assign.manual. Entry must be eligible with an available positive number inside its configured category range. Identical replay reuses the assignment; replacement is rejected. Serialized with automatic allocation and audited transactionally.
       tags: [Admin Bibs]
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [registration_slug, bib_number]
+              properties:
+                registration_slug: { type: string, format: uuid }
+                bib_number: { type: integer, minimum: 1 }
       responses:
-        "200": { description: OK }
+        "201": { description: Assigned }
+        "200": { description: Identical existing assignment reused }
+        "409": { description: Ineligible entry, invalid range, occupied number or existing different assignment }
+        "404": { description: Event, registration or category not found }
   /admin/events/{id}/bibs/lock:
     post:
       summary: Lock bibs
+      description: Requires bib.assign.manual. Looks up the assignment within the route event, preserves the first lock timestamp on replay and audits the lock transactionally.
       tags: [Admin Bibs]
       parameters:
         - in: path
@@ -867,6 +1108,27 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: OK }
+  /admin/race-day/events:
+    get:
+      summary: List minimal event information for race desk staff
+      description: Requires checkin.access, bib.assign.auto or bib.assign.manual. Excludes private event configuration.
+      tags: [Admin Bibs]
+      responses:
+        "200": { description: Event identifiers, titles, type, location and date }
+        "403": { description: Missing race desk permission }
+  /admin/race-day/events/{id}/entries:
+    get:
+      summary: Find race desk entries
+      description: Requires checkin.access, bib.assign.auto or bib.assign.manual. Returns at most 100 matching entries in this event, with reference, name, category, eligibility, bib and collection timestamps. Excludes contact, medical and financial details. Search is a literal substring except exact bib matching.
+      tags: [Admin Bibs]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: search, schema: { type: string, maxLength: 200 } }
+      responses:
+        "200": { description: Matching race desk entries }
+        "400": { description: Invalid identifier or search }
+        "403": { description: Missing permission }
+        "404": { description: Event not found }
   /admin/checkin/{registrationId}:
     post:
       summary: Check-in registration

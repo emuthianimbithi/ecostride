@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -42,6 +43,8 @@ func NewHandler(service *Service, auditService *audit.Service, db *gorm.DB, cfg 
 }
 
 type createRequest struct {
+	WaiverAccepted     bool            `json:"waiver_accepted"`
+	WaiverSlug         string          `json:"waiver_slug"`
 	EventSlug          string          `json:"event_slug" binding:"required"`
 	CategorySlug       *string         `json:"category_slug"`
 	AthleteName        string          `json:"athlete_name" binding:"required"`
@@ -149,12 +152,18 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 		return
 	}
 
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if !req.WaiverAccepted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "waiver acceptance required"})
+		return
+	}
+
 	existing, err := h.findExistingRegistration(c, event.ID, req.Email)
 	if err != nil {
 		return
 	}
 	if existing != nil {
-		c.JSON(http.StatusOK, existing)
+		c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use your confirmation link or contact support"})
 		return
 	}
 
@@ -170,6 +179,11 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 	waiver, err := h.currentWaiver(c, event.ID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "waiver not available"})
+		return
+	}
+
+	if req.WaiverSlug != waiver.Slug.String() {
+		c.JSON(http.StatusConflict, gin.H{"error": "waiver changed; reload and accept the current terms"})
 		return
 	}
 
@@ -232,6 +246,11 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 
 	created, err := h.Service.CreateRegistration(c.Request.Context(), registration, consent)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_reg_event_email_active_v2" {
+			c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use your confirmation link or contact support"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create registration"})
 		return
 	}
@@ -243,7 +262,7 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 		_ = SendConfirmationEmail(c.Request.Context(), h.Config, h.DB, created.ID)
 	}
 
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, gin.H{"slug": created.Slug, "status": created.Status})
 }
 
 func (h *Handler) GetPublicRegistration(c *gin.Context) {
@@ -557,7 +576,8 @@ func (h *Handler) UpdateRegistration(c *gin.Context) {
 		registration.EmergencyPhone = *req.EmergencyPhone
 	}
 	if req.Status != nil {
-		registration.Status = *req.Status
+		c.JSON(http.StatusConflict, gin.H{"error": "status cannot be edited; use cancellation or the verified payment workflow"})
+		return
 	}
 	if req.Dob != nil {
 		registration.Dob = req.Dob
@@ -636,42 +656,6 @@ func (h *Handler) ResendConfirmation(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "queued"})
 }
 
-func (h *Handler) ResendReceipt(c *gin.Context) {
-	slug, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registration id"})
-		return
-	}
-
-	registration, err := h.Service.GetRegistrationBySlug(c.Request.Context(), slug.String())
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "registration not found"})
-		return
-	}
-
-	var payment models.Payment
-	if err := h.DB.WithContext(c.Request.Context()).
-		Where("registration_id = ? AND status = 'success'", registration.ID).
-		Order("created_at desc").
-		First(&payment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
-		return
-	}
-
-	if h.Receipts == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "receipt service unavailable"})
-		return
-	}
-
-	if _, err := h.Receipts.IssueReceipt(c.Request.Context(), payment, registration.Email); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to queue receipt"})
-		return
-	}
-
-	h.logAudit(c, "registration.resend.receipt", "registration", registration.Slug.String(), nil, gin.H{"status": "queued"})
-	c.JSON(http.StatusOK, gin.H{"status": "queued"})
-}
-
 func (h *Handler) findEventBySlug(c *gin.Context, slug string) (models.Event, error) {
 	var event models.Event
 	if err := h.DB.WithContext(c.Request.Context()).Where("url_slug = ?", slug).First(&event).Error; err != nil {
@@ -683,6 +667,15 @@ func (h *Handler) findEventBySlug(c *gin.Context, slug string) (models.Event, er
 
 func (h *Handler) resolveCategory(c *gin.Context, eventID uint, slug *string) (*models.EventCategory, error) {
 	if slug == nil {
+		var count int64
+		if err := h.DB.WithContext(c.Request.Context()).Model(&models.EventCategory{}).Where("event_id = ?", eventID).Count(&count).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load categories"})
+			return nil, err
+		}
+		if count > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "category required"})
+			return nil, errors.New("category required")
+		}
 		return nil, nil
 	}
 
@@ -729,7 +722,7 @@ func (h *Handler) currentWaiver(c *gin.Context, eventID uint) (models.WaiverVers
 func (h *Handler) ensureNoDuplicate(c *gin.Context, eventID uint, email string) error {
 	var existing models.Registration
 	if err := h.DB.WithContext(c.Request.Context()).
-		Where("event_id = ? AND email = ? AND status IN ('created','pending_payment','paid','confirmed')", eventID, email).
+		Where("event_id = ? AND LOWER(TRIM(email)) = ? AND status IN ('created','pending_payment','paid','confirmed')", eventID, email).
 		First(&existing).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "registration already exists"})
 		return errors.New("duplicate")
@@ -744,7 +737,7 @@ func (h *Handler) ensureNoDuplicate(c *gin.Context, eventID uint, email string) 
 func (h *Handler) findExistingRegistration(c *gin.Context, eventID uint, email string) (*models.Registration, error) {
 	var existing models.Registration
 	err := h.DB.WithContext(c.Request.Context()).
-		Where("event_id = ? AND email = ? AND status IN ('created','pending_payment','paid','confirmed', 'failed')", eventID, email).
+		Where("event_id = ? AND LOWER(TRIM(email)) = ? AND status IN ('created','pending_payment','paid','confirmed', 'failed')", eventID, email).
 		First(&existing).Error
 
 	if err == nil {

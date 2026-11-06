@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { apiGet, apiPost, apiPut } from "../../../lib/api-client"
 import { normalizeProduct, type NormalizedProduct } from "../../../lib/normalize-product"
 import { toastApiError } from "../../../lib/toast-api-error"
+import { useAuth } from "../../../components/auth-provider"
 import { useToast } from "../../../components/toast"
 import { IconAction } from "../../../components/icon-action"
 import {
@@ -47,6 +48,8 @@ type Order = {
   currency: string
   total_minor: number
   status: string
+  has_merchandise?: boolean
+  collected_at?: string | null
   created_at: string
   payment_slug?: string | null
   payment_status?: string | null
@@ -66,6 +69,19 @@ const isSlug = (value: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
 
 export default function ShopPage() {
   const { toast } = useToast()
+  const { hasPermission } = useAuth()
+  const [pickupQuery, setPickupQuery] = useState("")
+  const [collecting, setCollecting] = useState<string | null>(null)
+  const collect = async (order: Order) => {
+    if (collecting || !window.confirm(`Hand over the merchandise for ${order.buyer_name}, order ${order.slug}?`)) return
+    setCollecting(order.slug)
+    try {
+      await apiPost(`/admin/orders/${order.slug}/collect`, {})
+      await loadOrders()
+      toast({ title: "Collection recorded", description: "This order is now marked as collected.", variant: "success" })
+    } catch (err) { toastApiError(toast, err) }
+    finally { setCollecting(null) }
+  }
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -373,7 +389,8 @@ export default function ShopPage() {
     formErrors.type ? "border-rose-300" : "border-slate-200"
 }`}
               >
-                <option value="DONATION_TIER">Donation tier</option>
+                <option value="DONATION_TIER">Support contribution</option>
+                <option value="VIRTUAL_PARTICIPATION">Virtual participation</option>
                 <option value="MERCH">Merch</option>
               </select>
               {formErrors.type ? <p className="text-xs text-rose-600">{formErrors.type}</p> : null}
@@ -524,7 +541,8 @@ export default function ShopPage() {
           className="rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-700"
         >
           <option value="all">All types</option>
-          <option value="DONATION_TIER">Donation tier</option>
+          <option value="DONATION_TIER">Support contribution</option>
+                <option value="VIRTUAL_PARTICIPATION">Virtual participation</option>
           <option value="MERCH">Merch</option>
         </select>
         <select
@@ -619,7 +637,9 @@ export default function ShopPage() {
           </span>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
+        <label className="mt-4 block text-sm">Find a buyer or order reference<input value={pickupQuery} onChange={e => setPickupQuery(e.target.value)} placeholder="Name, email, order reference…" className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" /></label>
+        <p className="mt-2 text-sm text-slate-600">Check the buyer’s paid order reference or receipt before handing over merchandise.</p>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
@@ -629,13 +649,15 @@ export default function ShopPage() {
                 <th className="px-3 py-2">Payment</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2">Collection</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {orders.filter(order => `${order.buyer_name} ${order.email} ${order.slug}`.toLowerCase().includes(pickupQuery.toLowerCase())).map((order) => (
                 <tr key={order.slug} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-800">{order.buyer_name}</div>
+                    <div className="break-all text-xs text-slate-500">{order.slug}</div>
                     <div className="text-xs text-slate-500">{order.email}</div>
                     <div className="text-xs text-slate-500">{order.phone}</div>
                   </td>
@@ -670,11 +692,14 @@ export default function ShopPage() {
                   <td className="px-3 py-2 text-slate-600">
                     {order.created_at ? new Date(order.created_at).toLocaleDateString() : "-"}
                   </td>
+                  <td className="px-3 py-2 text-sm">
+                    {order.collected_at ? <span>Collected {new Date(order.collected_at).toLocaleString()}</span> : hasPermission("shop.fulfill") && order.has_merchandise && order.status === "paid" ? <button disabled={collecting != null} onClick={() => collect(order)} className="rounded-full border border-slate-300 px-3 py-2 disabled:opacity-50">Mark collected</button> : "Not collected"}
+                  </td>
                 </tr>
               ))}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-slate-500">
+                  <td colSpan={7} className="px-3 py-4 text-center text-slate-500">
                     No orders yet.
                   </td>
                 </tr>

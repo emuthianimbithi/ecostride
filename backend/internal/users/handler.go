@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"ecostride/backend/internal/audit"
 	"ecostride/backend/internal/auth"
@@ -146,7 +147,35 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 		user.PasswordHash = hash
 	}
 
-	if err := h.DB.WithContext(c.Request.Context()).Save(&user).Error; err != nil {
+	err = h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{}
+		if req.Name != nil {
+			updates["name"] = user.Name
+		}
+		if req.Email != nil {
+			updates["email"] = user.Email
+		}
+		if req.Phone != nil {
+			updates["phone"] = user.Phone
+		}
+		if req.IsActive != nil {
+			updates["is_active"] = user.IsActive
+		}
+		if req.Password != nil && *req.Password != "" {
+			updates["password_hash"] = user.PasswordHash
+		}
+		if req.IsActive != nil || (req.Password != nil && *req.Password != "") {
+			updates["auth_version"] = gorm.Expr("auth_version + 1")
+		}
+		if err := tx.Model(&user).Updates(updates).Error; err != nil {
+			return err
+		}
+		if req.IsActive != nil || (req.Password != nil && *req.Password != "") {
+			return tx.Model(&models.RefreshToken{}).Where("user_id = ? AND revoked_at IS NULL", user.ID).Update("revoked_at", time.Now()).Error
+		}
+		return nil
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
 	}

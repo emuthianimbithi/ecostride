@@ -3,6 +3,7 @@ package payments
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -54,6 +55,7 @@ type refundRequest struct {
 }
 
 type paymentListItem struct {
+	RequiresReview   bool
 	Slug             string
 	Provider         string
 	Currency         string
@@ -101,14 +103,6 @@ func (h *Handler) StripeCheckout(c *gin.Context) {
 	}
 
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
-	if existing, _ := h.Service.EnsureIdempotency(c.Request.Context(), idempotencyKey); existing != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"payment_id":   existing.Slug,
-			"status":       existing.Status,
-			"checkout_url": extractMetadata(existing.Metadata, "checkout_url"),
-		})
-		return
-	}
 
 	var ctxData PaymentContext
 	var err error
@@ -132,9 +126,28 @@ func (h *Handler) StripeCheckout(c *gin.Context) {
 		return
 	}
 
-	payment, err := h.Service.CreatePayment(c.Request.Context(), "STRIPE", ctxData, idempotencyKey, nil)
+	payment, created, err := h.Service.ClaimPayment(c.Request.Context(), "STRIPE", ctxData, idempotencyKey, map[string]interface{}{"success_url": successURL, "cancel_url": cancelURL})
 	if err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create payment", nil)
+		status := http.StatusInternalServerError
+		if errors.Is(err, ErrIdempotencyRequired) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, ErrIdempotencyConflict) || errors.Is(err, ErrPaymentInProgress) {
+			status = http.StatusConflict
+		}
+		message := "failed to create payment"
+		if status != http.StatusInternalServerError {
+			message = err.Error()
+		}
+		apierrors.AbortWithError(c, status, "", message, nil)
+		return
+	}
+	if !created {
+		status := http.StatusOK
+		if payment.ProviderRef == "" && payment.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		c.JSON(status, gin.H{"payment_id": payment.Slug, "status": payment.Status, "checkout_url": extractMetadata(payment.Metadata, "checkout_url")})
 		return
 	}
 
@@ -177,10 +190,6 @@ func (h *Handler) MpesaSTK(c *gin.Context) {
 	}
 
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
-	if existing, _ := h.Service.EnsureIdempotency(c.Request.Context(), idempotencyKey); existing != nil {
-		c.JSON(http.StatusOK, gin.H{"payment_id": existing.Slug, "status": existing.Status})
-		return
-	}
 
 	phone := normalizePhone(req.Phone)
 	if phone == "" {
@@ -215,9 +224,28 @@ func (h *Handler) MpesaSTK(c *gin.Context) {
 		return
 	}
 
-	payment, err := h.Service.CreatePayment(c.Request.Context(), "MPESA", ctxData, idempotencyKey, map[string]interface{}{"phone": phone})
+	payment, created, err := h.Service.ClaimPayment(c.Request.Context(), "MPESA", ctxData, idempotencyKey, map[string]interface{}{"phone": phone})
 	if err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create payment", nil)
+		status := http.StatusInternalServerError
+		if errors.Is(err, ErrIdempotencyRequired) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, ErrIdempotencyConflict) || errors.Is(err, ErrPaymentInProgress) {
+			status = http.StatusConflict
+		}
+		message := "failed to create payment"
+		if status != http.StatusInternalServerError {
+			message = err.Error()
+		}
+		apierrors.AbortWithError(c, status, "", message, nil)
+		return
+	}
+	if !created {
+		status := http.StatusOK
+		if payment.ProviderRef == "" && payment.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		c.JSON(status, gin.H{"payment_id": payment.Slug, "status": payment.Status, "checkout_url": extractMetadata(payment.Metadata, "checkout_url")})
 		return
 	}
 
@@ -263,7 +291,7 @@ func (h *Handler) StripeWebhook(c *gin.Context) {
 		return
 	}
 
-	if event.Type != "checkout.session.completed" {
+	if event.Type != "checkout.session.completed" && event.Type != "checkout.session.async_payment_succeeded" {
 		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
 		return
 	}
@@ -286,7 +314,7 @@ func (h *Handler) StripeWebhook(c *gin.Context) {
 			if paymentSlug, ok := sessionObj.Metadata["payment_slug"]; ok {
 				if parsed, parseErr := uuid.Parse(paymentSlug); parseErr == nil {
 					if err := h.DB.WithContext(c.Request.Context()).Where("slug = ?", parsed).First(&payment).Error; err == nil {
-						_, _ = h.Service.UpdatePayment(c.Request.Context(), payment, providerRef, nil)
+						// Validate identity, amount and currency before binding the provider reference.
 					}
 				}
 			}
@@ -297,12 +325,16 @@ func (h *Handler) StripeWebhook(c *gin.Context) {
 		}
 	}
 
-	if err := h.Service.RecordEvent(c.Request.Context(), payment.ID, event.ID, string(event.Type), payload); err != nil {
-		if errors.Is(err, ErrDuplicateEvent) {
-			c.JSON(http.StatusOK, gin.H{"status": "duplicate"})
-			return
-		}
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to record event", nil)
+	if payment.Provider != "STRIPE" || (payment.ProviderRef != "" && payment.ProviderRef != sessionObj.ID) {
+		apierrors.AbortWithError(c, http.StatusBadRequest, "", "payment provider reference mismatch", nil)
+		return
+	}
+	if sessionObj.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
+		c.JSON(http.StatusOK, gin.H{"status": "awaiting_payment"})
+		return
+	}
+	if sessionObj.AmountTotal != int64(payment.AmountMinor) || !strings.EqualFold(string(sessionObj.Currency), payment.Currency) {
+		apierrors.AbortWithError(c, http.StatusBadRequest, "", "payment amount or currency mismatch", nil)
 		return
 	}
 
@@ -313,11 +345,15 @@ func (h *Handler) StripeWebhook(c *gin.Context) {
 	if sessionObj.CustomerDetails != nil && sessionObj.CustomerDetails.Email != "" {
 		metadata["customer_email"] = sessionObj.CustomerDetails.Email
 	}
-	if len(metadata) > 0 {
-		_, _ = h.Service.UpdatePayment(c.Request.Context(), payment, "", metadata)
+	if payment.ProviderRef == "" {
+		var err error
+		payment, err = h.Service.UpdatePayment(c.Request.Context(), payment, providerRef, nil)
+		if err != nil {
+			apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to bind provider reference", nil)
+			return
+		}
 	}
-
-	updated, err := h.Service.MarkPaymentSuccess(c.Request.Context(), payment)
+	updated, err := h.Service.ProcessNotification(c.Request.Context(), payment, event.ID, string(event.Type), payload, metadata, true)
 	if err != nil {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to update payment", nil)
 		return
@@ -357,15 +393,6 @@ func (h *Handler) MpesaWebhook(c *gin.Context) {
 		return
 	}
 
-	if err := h.Service.RecordEvent(c.Request.Context(), payment.ID, stk.CheckoutRequestID, "mpesa.stk", payload); err != nil {
-		if errors.Is(err, ErrDuplicateEvent) {
-			c.JSON(http.StatusOK, gin.H{"status": "duplicate"})
-			return
-		}
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to record event", nil)
-		return
-	}
-
 	metadata := map[string]interface{}{
 		"result_code": stk.ResultCode,
 		"result_desc": stk.ResultDesc,
@@ -375,26 +402,15 @@ func (h *Handler) MpesaWebhook(c *gin.Context) {
 		metadata["mpesa_receipt"] = receipt
 	}
 
-	if _, err := h.Service.UpdatePayment(c.Request.Context(), payment, "", metadata); err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to update payment", nil)
+	// Result code is part of the event identity: a later success must not be
+	// suppressed by an earlier failure for the same checkout request.
+	eventID := fmt.Sprintf("MPESA:%s:%d", stk.CheckoutRequestID, stk.ResultCode)
+	updated, err := h.Service.ProcessNotification(c.Request.Context(), payment, eventID, "mpesa.stk", payload, metadata, stk.ResultCode == 0)
+	if err != nil {
+		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to process payment event", nil)
 		return
 	}
-
-	if stk.ResultCode == 0 {
-		updated, err := h.Service.MarkPaymentSuccess(c.Request.Context(), payment)
-		if err != nil {
-			apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to update payment", nil)
-			return
-		}
-		h.logAudit(c, "payment.success", "payment", updated.Slug.String(), payment, updated)
-	} else {
-		updated, err := h.Service.MarkPaymentFailed(c.Request.Context(), payment)
-		if err != nil {
-			apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to update payment", nil)
-			return
-		}
-		h.logAudit(c, "payment.failed", "payment", updated.Slug.String(), payment, updated)
-	}
+	h.logAudit(c, "payment."+updated.Status, "payment", updated.Slug.String(), payment, updated)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -457,6 +473,7 @@ func (h *Handler) ListPayments(c *gin.Context) {
 			payments.status,
 			payments.provider_ref,
 			payments.created_at,
+ ((payments.metadata->>'requires_review') = 'true' OR (payments.status = 'pending' AND payments.created_at < NOW() - INTERVAL '15 minutes')) IS TRUE AS requires_review,
 			registrations.slug as registration_slug,
 			orders.slug as order_slug,
 			COALESCE(registrations.athlete_name, orders.buyer_name) as payer_name,
@@ -477,6 +494,9 @@ func (h *Handler) ListPayments(c *gin.Context) {
 		query = query.Where("payments.provider = ?", strings.ToUpper(provider))
 	}
 
+	if c.Query("needs_review") == "true" {
+		query = query.Where("payments.metadata->>'requires_review' = 'true' OR (payments.status = 'pending' AND payments.created_at < ?)", time.Now().Add(-15*time.Minute))
+	}
 	var payments []paymentListItem
 	if err := query.Order("payments.created_at desc").Scan(&payments).Error; err != nil {
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to list payments", nil)
@@ -484,6 +504,7 @@ func (h *Handler) ListPayments(c *gin.Context) {
 	}
 
 	type paymentAdminDTO struct {
+		RequiresReview    bool       `json:"requires_review"`
 		PaymentID         string     `json:"payment_id"`
 		Status            string     `json:"status"`
 		Provider          string     `json:"provider"`
@@ -506,6 +527,7 @@ func (h *Handler) ListPayments(c *gin.Context) {
 	for _, p := range payments {
 		statusVal := CanonicalizePaymentStatus(p.Status)
 		out = append(out, paymentAdminDTO{
+			RequiresReview:   p.RequiresReview,
 			PaymentID:        p.Slug,
 			Status:           statusVal,
 			Provider:         strings.ToUpper(p.Provider),
@@ -564,6 +586,13 @@ func (h *Handler) Refund(c *gin.Context) {
 			apierrors.AbortWithError(c, http.StatusBadRequest, "", "amount_minor exceeds payment", nil)
 			return
 		}
+	}
+
+	// Until cumulative refund accounting exists, a partial refund must not
+	// mark the whole payment and entry as refunded.
+	if req.AmountMinor != nil && *req.AmountMinor != payment.AmountMinor {
+		apierrors.AbortWithError(c, http.StatusBadRequest, "", "partial refunds are not supported", nil)
+		return
 	}
 
 	refundAmount := payment.AmountMinor

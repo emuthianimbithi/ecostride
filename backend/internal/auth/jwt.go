@@ -13,6 +13,7 @@ type Claims struct {
 	UserID      uint      `json:"uid"`
 	UserSlug    uuid.UUID `json:"slug"`
 	Permissions []string  `json:"perms"`
+	AuthVersion uint      `json:"av"`
 	jwt.RegisteredClaims
 }
 
@@ -33,7 +34,7 @@ func NewManager(accessSecret, refreshSecret string) *Manager {
 	}
 }
 
-func (m *Manager) SignAccessToken(userID uint, userSlug uuid.UUID, permissions []string) (string, error) {
+func (m *Manager) SignAccessToken(userID uint, userSlug uuid.UUID, permissions []string, version ...uint) (string, error) {
 	claims := Claims{
 		UserID:      userID,
 		UserSlug:    userSlug,
@@ -44,20 +45,27 @@ func (m *Manager) SignAccessToken(userID uint, userSlug uuid.UUID, permissions [
 			Subject:   "access",
 		},
 	}
+	if len(version) > 0 {
+		claims.AuthVersion = version[0]
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(m.AccessSecret)
 }
 
-func (m *Manager) SignRefreshToken(userID uint, userSlug uuid.UUID) (string, error) {
+func (m *Manager) SignRefreshToken(userID uint, userSlug uuid.UUID, version ...uint) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		UserSlug: userSlug,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.RefreshTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   "refresh",
 		},
+	}
+	if len(version) > 0 {
+		claims.AuthVersion = version[0]
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

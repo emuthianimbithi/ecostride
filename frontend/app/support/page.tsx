@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation"
+import { SupportShop } from "../../components/support-shop"
 
-export default function SupportPage() {
-  // Fundraising is temporarily paused; keep old links safe while the page is offline.
-  redirect("/contact")
-}
+export const metadata = { title: "Support us | EcoStride", description: "Take part from anywhere and support EcoStride’s coastal work." }
+export default function SupportPage() { return <SupportShop mode="support" /> }

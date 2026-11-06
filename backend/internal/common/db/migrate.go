@@ -79,11 +79,11 @@ func createCustomIndexes(db *gorm.DB) error {
 		query string
 	}{
 		{
-			name: "idx_reg_event_email_active",
+			name: "idx_reg_event_email_active_v2",
 			query: `
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_reg_event_email_active 
-                ON registrations (event_id, email) 
-                WHERE status IN ('created', 'confirmed', 'pending')
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_reg_event_email_active_v2
+                ON registrations (event_id, LOWER(BTRIM(email)))
+                WHERE deleted_at IS NULL AND status IN ('created', 'confirmed', 'pending', 'pending_payment', 'paid', 'failed')
             `,
 		},
 	}
@@ -94,5 +94,8 @@ func createCustomIndexes(db *gorm.DB) error {
 		}
 	}
 
+	if err := db.Exec("DROP INDEX IF EXISTS idx_reg_event_email_active").Error; err != nil {
+		return err
+	}
 	return nil
 }

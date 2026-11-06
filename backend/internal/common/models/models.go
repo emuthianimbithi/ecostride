@@ -18,6 +18,7 @@ type User struct {
 	Phone        string    `json:"phone"`
 	PasswordHash string    `json:"-"` // never expose
 	IsActive     bool      `json:"is_active"`
+	AuthVersion  uint      `gorm:"not null;default:0" json:"-"`
 	Roles        []Role    `gorm:"many2many:user_roles" json:"roles,omitempty"`
 }
 
@@ -299,6 +300,9 @@ type Checkin struct {
 // Payments + receipts
 
 type Payment struct {
+	LastCheckedAt        *time.Time `json:"last_checked_at,omitempty"`
+	NextCheckAt          *time.Time `gorm:"index" json:"-"`
+	VerificationAttempts int        `json:"verification_attempts"`
 	gorm.Model
 	Slug           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();uniqueIndex" json:"slug"`
 	RegistrationID *uint          `gorm:"index" json:"registration_id,omitempty"`
@@ -320,6 +324,7 @@ type PaymentEvent struct {
 	Type            string         `json:"type"`
 	Payload         datatypes.JSON `gorm:"type:jsonb" json:"payload"`
 	ReceivedAt      time.Time      `json:"received_at"`
+	ProcessedAt     *time.Time     `json:"processed_at,omitempty"`
 }
 
 type Receipt struct {
@@ -476,6 +481,11 @@ type Product struct {
 }
 
 type Order struct {
+	CheckoutKey          *string    `gorm:"uniqueIndex" json:"-"`
+	RequestFingerprint   string     `json:"-"`
+	CollectedAt          *time.Time `json:"collected_at,omitempty"`
+	CollectedBy          *uint      `json:"-"`
+	ReservationExpiresAt *time.Time `json:"reservation_expires_at,omitempty"`
 	gorm.Model
 	Slug       uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();uniqueIndex" json:"slug"`
 	BuyerName  string    `json:"buyer_name"`
@@ -487,6 +497,8 @@ type Order struct {
 }
 
 type OrderItem struct {
+	ProductName string `json:"product_name"`
+	ProductType string `json:"product_type"`
 	gorm.Model
 	Slug           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();uniqueIndex" json:"slug"`
 	OrderID        uint           `gorm:"index" json:"order_id"`

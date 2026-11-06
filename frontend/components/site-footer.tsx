@@ -12,6 +12,8 @@ import { useToast } from "./toast"
 
 const quickLinks = [
   { label: "Events", href: "/events" },
+  { label: "Support us", href: "/support" },
+  { label: "Shop", href: "/shop" },
   { label: "Results", href: "/results" },
   { label: "Registrations", href: "/registrations" },
   { label: "Orders", href: "/orders" },

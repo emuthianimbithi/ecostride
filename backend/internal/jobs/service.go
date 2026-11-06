@@ -15,6 +15,10 @@ import (
 )
 
 // HandlerFunc processes a job payload.
+const leaseDuration = 2 * time.Minute
+const handlerTimeout = 90 * time.Second
+const maxAttempts = 3
+
 type HandlerFunc func(ctx context.Context, job models.Job) error
 
 // Service manages background jobs.
@@ -86,12 +90,14 @@ func (s *Service) processNext(ctx context.Context) {
 		return
 	}
 
-	if err := handler(ctx, *job); err != nil {
+	runCtx, cancel := context.WithTimeout(ctx, handlerTimeout)
+	defer cancel()
+	if err := handler(runCtx, *job); err != nil {
 		s.retryJob(ctx, *job, err)
 		return
 	}
 
-	_ = s.DB.WithContext(ctx).Model(&models.Job{}).Where("id = ?", job.ID).Updates(map[string]interface{}{
+	_ = s.DB.WithContext(ctx).Model(&models.Job{}).Where("id = ? AND status = ? AND locked_at = ? AND attempts = ?", job.ID, "processing", job.LockedAt, job.Attempts).Updates(map[string]interface{}{
 		"status":    "completed",
 		"run_at":    time.Now(),
 		"locked_at": nil,
@@ -101,20 +107,31 @@ func (s *Service) processNext(ctx context.Context) {
 func (s *Service) nextJob(ctx context.Context) (*models.Job, error) {
 	var job models.Job
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		// Exhausted leases cannot remain processing forever after worker crashes.
+		if err := tx.Model(&models.Job{}).Where("status = ? AND (locked_at IS NULL OR locked_at < ?) AND attempts >= ?", "processing", now.Add(-leaseDuration), maxAttempts).Updates(map[string]interface{}{"status": "failed", "locked_at": nil, "last_error": "worker lease expired after retry limit"}).Error; err != nil {
+			return err
+		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("status = ? AND run_at <= ?", "pending", time.Now()).
+			Where("attempts < ? AND ((status = ? AND run_at <= ?) OR (status = ? AND (locked_at IS NULL OR locked_at < ?)))", maxAttempts, "pending", now, "processing", now.Add(-leaseDuration)).
 			Order("run_at asc").
-			First(&job).Error; err != nil {
+			Limit(1).Find(&job).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
 			return err
 		}
 
-		now := time.Now()
+		if job.ID == 0 {
+			return nil
+		}
+		job.Attempts++
 		job.Status = "processing"
 		job.LockedAt = &now
 		return tx.Save(&job).Error
 	})
 
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err == nil && job.ID == 0 {
 		return nil, nil
 	}
 	if err != nil {
@@ -123,27 +140,20 @@ func (s *Service) nextJob(ctx context.Context) (*models.Job, error) {
 	return &job, nil
 }
 
+// Completion and retry updates are fenced to this exact claim. An expired
+// worker cannot overwrite the newer worker's result.
+func (s *Service) updateClaim(ctx context.Context, job models.Job, values map[string]interface{}) {
+	_ = s.DB.WithContext(ctx).Model(&models.Job{}).Where("id = ? AND status = ? AND locked_at = ? AND attempts = ?", job.ID, "processing", job.LockedAt, job.Attempts).Updates(values).Error
+}
+
 func (s *Service) retryJob(ctx context.Context, job models.Job, err error) {
-	job.Attempts++
-	job.LastError = err.Error()
-
-	if job.Attempts >= 3 {
-		job.Status = "failed"
-		job.LockedAt = nil
-		_ = s.DB.WithContext(ctx).Save(&job).Error
-		return
+	status := "pending"
+	if job.Attempts >= maxAttempts {
+		status = "failed"
 	}
-
-	job.Status = "pending"
-	job.LockedAt = nil
-	job.RunAt = time.Now().Add(1 * time.Minute)
-	_ = s.DB.WithContext(ctx).Save(&job).Error
+	s.updateClaim(ctx, job, map[string]interface{}{"status": status, "last_error": err.Error(), "locked_at": nil, "run_at": time.Now().Add(time.Minute)})
 }
 
 func (s *Service) failJob(ctx context.Context, job models.Job, err error) {
-	job.Attempts++
-	job.LastError = err.Error()
-	job.Status = "failed"
-	job.LockedAt = nil
-	_ = s.DB.WithContext(ctx).Save(&job).Error
+	s.updateClaim(ctx, job, map[string]interface{}{"status": "failed", "last_error": err.Error(), "locked_at": nil})
 }

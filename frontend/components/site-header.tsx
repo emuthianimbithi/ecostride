@@ -8,6 +8,8 @@ import { EcoStrideLogo } from "./ecostride-logo"
 
 const navLinks = [
   { label: "Events", href: "/events" },
+  { label: "Support us", href: "/support" },
+  { label: "Shop", href: "/shop" },
   { label: "Results", href: "/results" },
   { label: "Blog", href: "/blog" },
   { label: "Sponsors", href: "/sponsors" },
@@ -50,7 +52,7 @@ export function SiteHeader() {
         <Link href="/" className="text-foreground">
           <EcoStrideLogo textClassName="text-lg" />
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-medium text-sand-700 lg:flex">
+        <nav className="hidden items-center gap-3 text-xs font-medium xl:text-sm text-sand-700 lg:flex">
           {navLinks.map((link) => (
             <Link key={link.href} href={link.href} className="link-underline transition hover:text-foreground">
               {link.label}

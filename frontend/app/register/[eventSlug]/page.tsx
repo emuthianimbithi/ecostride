@@ -35,6 +35,7 @@ type EventDetails = {
 }
 
 type Waiver = {
+    slug: string
     title: string
     content: string
 }
@@ -78,7 +79,7 @@ const registrationSchema = z
         experience: z.string().optional(),
         extras: z.string().optional(),
         waiverAccepted: z.boolean().refine((value) => value, "Waiver acceptance required"),
-        paymentMethod: z.enum(["stripe", "mpesa"]).optional(),
+        paymentMethod: z.enum(["stripe", "mpesa", "pesapal"]).optional(),
         currency: z.enum(["KES", "USD", "EUR"]).optional(),
         mpesaPhone: z.string().optional()
     })
@@ -183,6 +184,7 @@ export default function Page() {
 
     const [event, setEvent] = useState<EventDetails | null>(null)
     const [categories, setCategories] = useState<EventCategory[]>([])
+    const [pesaPalEnabled, setPesaPalEnabled] = useState(false)
     const [waiver, setWaiver] = useState<Waiver | null>(null)
     const [formFields, setFormFields] = useState<EventFormField[]>([])
     const [fieldValues, setFieldValues] = useState<Record<string, string | boolean | number>>({})
@@ -251,6 +253,10 @@ export default function Page() {
         setStatus(null)
         setDraftHydrated(false)
 
+        apiGet<{ pesapal_enabled: boolean }>("/public/payments/providers")
+            .then(data => { setPesaPalEnabled(data.pesapal_enabled); if (data.pesapal_enabled) form.setValue("paymentMethod", "pesapal") })
+            .catch(() => setPesaPalEnabled(false))
+
         apiGet<EventDetails>(`/public/events/${eventSlug}`)
             .then(setEvent)
             .catch(() => setEvent(null))
@@ -292,8 +298,8 @@ export default function Page() {
                         medicalDeclaration: String(draft.form_values.medicalDeclaration ?? ""),
                         experience: String(draft.form_values.experience ?? ""),
                         extras: String(draft.form_values.extras ?? ""),
-                        waiverAccepted: draft.form_values.waiverAccepted === true,
-                        paymentMethod: draft.form_values.paymentMethod === "mpesa" ? "mpesa" : "stripe",
+                        waiverAccepted: false,
+                        paymentMethod: draft.form_values.paymentMethod === "pesapal" ? "pesapal" : draft.form_values.paymentMethod === "mpesa" ? "mpesa" : "stripe",
                         currency:
                             draft.form_values.currency === "USD" || draft.form_values.currency === "EUR"
                                 ? (draft.form_values.currency as "USD" | "EUR")
@@ -444,6 +450,11 @@ export default function Page() {
                     setStatus(null)
                     return
                 }
+                if (values.paymentMethod === "pesapal" && currency !== "KES") {
+                    form.setError("currency", { type: "manual", message: "PesaPal checkout currently supports KES" })
+                    setStatus(null)
+                    return
+                }
                 if (values.paymentMethod === "mpesa" && currency !== "KES") {
                     form.setError("currency", { type: "manual", message: "M-Pesa only supports KES" })
                     setStatus(null)
@@ -462,9 +473,11 @@ export default function Page() {
             if (values.extras) extrasPayload.notes = values.extras
             if (Object.keys(fieldValues).length > 0) extrasPayload.form_fields = fieldValues
 
-            // ✅ ALWAYS call backend create. Backend returns 201 (new) or 200 (existing).
+            // Acceptance is tied to the waiver version displayed in this session.
             const registration = await apiPost<RegistrationResponse>("/public/registrations", {
                 event_slug: eventSlug,
+                waiver_accepted: values.waiverAccepted,
+                waiver_slug: waiver?.slug,
                 category_slug: values.categorySlug || undefined,
                 athlete_name: values.athleteName,
                 email: values.email,
@@ -513,15 +526,29 @@ export default function Page() {
                 return
             }
 
-            // ✅ Otherwise payable + not confirmed => pay
+            if (values.paymentMethod === "pesapal") {
+                if (currency !== "KES") throw new Error("PesaPal checkout currently supports KES. Select KES to continue.")
+                setStatus("Opening PesaPal checkout...")
+                const payment = await apiPost<{ checkout_url?: string; payment_id: string }>(
+                    "/public/payments/pesapal/checkout",
+                    { registration_slug: regSlug, currency },
+                    { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
+                )
+                if (payment.checkout_url) window.location.href = payment.checkout_url
+                else router.push(`/payment/${payment.payment_id}`)
+                return
+            }
+
+            // Otherwise payable + not confirmed => pay
             if (values.paymentMethod === "stripe") {
                 setStatus("Redirecting to Stripe...")
-                const data = await apiPost<{ checkout_url: string }>(
+                const data = await apiPost<{ checkout_url?: string; payment_id: string }>(
                     "/public/payments/stripe/checkout",
                     { registration_slug: regSlug, currency },
                     { headers: { "X-Idempotency-Key": crypto.randomUUID() } }
                 )
-                window.location.href = data.checkout_url
+                if (data.checkout_url) window.location.href = data.checkout_url
+                else router.push(`/payment/${data.payment_id}`)
                 return
             }
 
@@ -801,6 +828,10 @@ export default function Page() {
                                     <>
                                         <div className="space-y-2">
                                             <div className="grid gap-3 md:grid-cols-2">
+                                                {pesaPalEnabled && <label className={cx("flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm", form.watch("paymentMethod") === "pesapal" ? "border-primary bg-primary/5" : "border-border/70 bg-background")}>
+                                                    <input type="radio" value="pesapal" {...form.register("paymentMethod")} />
+                                                    <span><span className="block font-semibold">PesaPal</span><span className="text-xs text-muted-foreground">Pay securely using the options available at checkout · KES</span></span>
+                                                </label>}
                                                 <label
                                                     className={cx(
                                                         "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition",

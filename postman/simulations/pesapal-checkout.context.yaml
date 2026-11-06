@@ -1,0 +1,44 @@
+purpose:
+  stands_in_for: PesaPal API 3.0 authentication, order submission and transaction lookup
+  unblocks: Local checkout, IPN, recovery and token tests without a merchant account
+assumptions:
+  - id: verified-status
+    status: supported
+    claim: In the fixture scenarios, entries are granted only after matching server-side status lookup.
+    reason: Wrong amounts, provider failures and forged tracking IDs did not confirm a pending entry; matching results did.
+    verification: TestPesaPalSimulation passed against a local Postman simulation, with authentication/submission/status request events observed.
+    source: backend/internal/payments/pesapal_test.go; backend/docs/PESAPAL.md; https://developer.pesapal.com/how-to-integrate/e-commerce/api-30-json/gettransactionstatus
+    updated_at: "2026-11-05"
+  - id: uncertain-submission
+    status: supported
+    claim: In the local lost-response scenario, repeated checkout caused one provider submission.
+    reason: The fixture saved an order before returning HTTP 503; the replay reused the pending local attempt, and a later verified IPN recovered it.
+    verification: Fixture submission count remained one and receipt count remained one in TestPesaPalSimulation/lost-submit.
+    source: postman/mocks/pesapal/default.js; backend/internal/payments/pesapal_test.go
+    updated_at: "2026-11-05"
+  - id: token-refresh
+    status: supported
+    claim: In the fixture, a rejected cached token is refreshed once before retrying a status GET.
+    reason: The final run logged two 401 status responses and four successful token requests across two checkout scenarios; each scenario reused its first token until rejection.
+    verification: TestPesaPalSimulation checked token counters and passed; request logs confirmed the HTTP 401 and authentication paths.
+    source: backend/internal/payments/pesapal_test.go; postman/mocks/pesapal/default.js
+    updated_at: "2026-11-05"
+  - id: sandbox-authentication
+    status: supported
+    claim: The supplied credentials authenticate to PesaPal sandbox through the application HTTP client.
+    reason: Opt-in authentication test passed against the sandbox endpoint; no order was submitted.
+    verification: TestPesaPalSandboxAuthentication passed on 2026-11-05 using the ignored local secret file; token and credentials were suppressed. GetIpnList separately returned zero registered IPNs.
+    source: backend/internal/payments/pesapal_test.go; backend/docs/PESAPAL.md
+    updated_at: "2026-11-05"
+  - id: merchant-acceptance
+    status: unknown
+    claim: Merchant activation, real payment methods, provider retries and settlement match deployment requirements.
+    reason: Only authentication has been checked against the real sandbox. No real orders or provider deliveries were used. Fixture responses derive from public documentation, not captured traffic.
+    verification: Local stand-in only; real sandbox and authorized live acceptance remain required.
+    source: backend/docs/PESAPAL.md
+    updated_at: "2026-11-05"
+fingerprints:
+  - id: local-run
+    date: "2026-11-05"
+    commit: null
+    cli: "1.74.0"

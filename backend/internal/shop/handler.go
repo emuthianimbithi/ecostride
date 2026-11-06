@@ -1,7 +1,11 @@
 package shop
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -143,6 +147,19 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	if len(req.Items) == 0 || len(req.Items) > 20 {
+		apierrors.AbortWithError(c, 400, "", "choose between 1 and 20 items", nil)
+		return
+	}
+	key := c.GetHeader("X-Idempotency-Key")
+	if strings.TrimSpace(key) == "" || len(key) > 200 {
+		apierrors.AbortWithError(c, 400, "", "X-Idempotency-Key required (maximum 200 characters)", nil)
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	encoded, _ := json.Marshal(req)
+	sum := sha256.Sum256(encoded)
+	fingerprint := hex.EncodeToString(sum[:])
 	items := make([]models.OrderItem, 0, len(req.Items))
 	var total int
 
@@ -169,21 +186,24 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 			return
 		}
 
-		if product.StockQty != nil && *product.StockQty < itemReq.Qty {
+		if itemReq.Qty > 100 {
 			apierrors.AbortWithError(c, http.StatusBadRequest, "", "insufficient stock", nil)
 			return
 		}
 
 		unitPrice, ok := priceForCurrency(product, currency)
-		if !ok {
-			if product.AllowCustomAmount && itemReq.CustomAmountMinor != nil {
-				unitPrice = *itemReq.CustomAmountMinor
-			} else {
-				apierrors.AbortWithError(c, http.StatusBadRequest, "", "price not available", nil)
+		if itemReq.CustomAmountMinor != nil {
+			if !product.AllowCustomAmount {
+				apierrors.AbortWithError(c, 400, "", "custom amount not allowed for this product", nil)
 				return
 			}
+			unitPrice = *itemReq.CustomAmountMinor
+			ok = true
 		}
-
+		if !ok || unitPrice <= 0 || unitPrice > math.MaxInt/itemReq.Qty || total > math.MaxInt-unitPrice*itemReq.Qty {
+			apierrors.AbortWithError(c, 400, "", "invalid product price or total", nil)
+			return
+		}
 		lineTotal := unitPrice * itemReq.Qty
 		total += lineTotal
 
@@ -198,6 +218,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 	}
 
 	order := models.Order{
+		CheckoutKey: &key, RequestFingerprint: fingerprint,
 		Slug:       uuid.New(),
 		BuyerName:  req.BuyerName,
 		Email:      req.Email,
@@ -209,11 +230,15 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 
 	created, err := h.Service.CreateOrder(c.Request.Context(), order, items)
 	if err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create order", nil)
+		status, message := 500, "failed to create order"
+		if errors.Is(err, ErrOrderConflict) || errors.Is(err, ErrStockUnavailable) || errors.Is(err, ErrPriceChanged) {
+			status, message = 409, err.Error()
+		}
+		apierrors.AbortWithError(c, status, "", message, nil)
 		return
 	}
 
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, gin.H{"slug": created.Slug, "status": created.Status, "total_minor": created.TotalMinor, "currency": created.Currency, "reservation_expires_at": created.ReservationExpiresAt})
 }
 
 func (h *Handler) PayOrderStripe(c *gin.Context) {
@@ -230,20 +255,6 @@ func (h *Handler) PayOrderStripe(c *gin.Context) {
 	}
 
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
-	if existing, _ := h.Payments.EnsureIdempotency(c.Request.Context(), idempotencyKey); existing != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"payment_id":   existing.Slug,
-			"status":       existing.Status,
-			"checkout_url": extractMetadata(existing.Metadata, "checkout_url"),
-		})
-		return
-	}
-
-	payment, err := h.Payments.CreatePayment(c.Request.Context(), "STRIPE", ctxData, idempotencyKey, nil)
-	if err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create payment", nil)
-		return
-	}
 
 	var req orderPaymentRequest
 	_ = c.ShouldBindJSON(&req)
@@ -258,6 +269,31 @@ func (h *Handler) PayOrderStripe(c *gin.Context) {
 	}
 	if successURL == "" || cancelURL == "" {
 		apierrors.AbortWithError(c, http.StatusBadRequest, "", "success_url and cancel_url required", nil)
+		return
+	}
+
+	payment, created, err := h.Payments.ClaimPayment(c.Request.Context(), "STRIPE", ctxData, idempotencyKey, map[string]interface{}{"success_url": successURL, "cancel_url": cancelURL})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, payments.ErrIdempotencyRequired) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, payments.ErrIdempotencyConflict) || errors.Is(err, payments.ErrPaymentInProgress) {
+			status = http.StatusConflict
+		}
+		message := "failed to create payment"
+		if status != http.StatusInternalServerError {
+			message = err.Error()
+		}
+		apierrors.AbortWithError(c, status, "", message, nil)
+		return
+	}
+	if !created {
+		status := http.StatusOK
+		if payment.ProviderRef == "" && payment.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		c.JSON(status, gin.H{"payment_id": payment.Slug, "status": payment.Status, "checkout_url": extractMetadata(payment.Metadata, "checkout_url")})
 		return
 	}
 
@@ -298,10 +334,6 @@ func (h *Handler) PayOrderMpesa(c *gin.Context) {
 	}
 
 	idempotencyKey := c.GetHeader("X-Idempotency-Key")
-	if existing, _ := h.Payments.EnsureIdempotency(c.Request.Context(), idempotencyKey); existing != nil {
-		c.JSON(http.StatusOK, gin.H{"payment_id": existing.Slug, "status": existing.Status})
-		return
-	}
 
 	var req orderPaymentRequest
 	if !apierrors.BindJSON(c, &req) {
@@ -314,9 +346,28 @@ func (h *Handler) PayOrderMpesa(c *gin.Context) {
 		return
 	}
 
-	payment, err := h.Payments.CreatePayment(c.Request.Context(), "MPESA", ctxData, idempotencyKey, map[string]interface{}{"phone": phone})
+	payment, created, err := h.Payments.ClaimPayment(c.Request.Context(), "MPESA", ctxData, idempotencyKey, map[string]interface{}{"phone": phone})
 	if err != nil {
-		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to create payment", nil)
+		status := http.StatusInternalServerError
+		if errors.Is(err, payments.ErrIdempotencyRequired) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, payments.ErrIdempotencyConflict) || errors.Is(err, payments.ErrPaymentInProgress) {
+			status = http.StatusConflict
+		}
+		message := "failed to create payment"
+		if status != http.StatusInternalServerError {
+			message = err.Error()
+		}
+		apierrors.AbortWithError(c, status, "", message, nil)
+		return
+	}
+	if !created {
+		status := http.StatusOK
+		if payment.ProviderRef == "" && payment.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		c.JSON(status, gin.H{"payment_id": payment.Slug, "status": payment.Status, "checkout_url": extractMetadata(payment.Metadata, "checkout_url")})
 		return
 	}
 
@@ -549,18 +600,20 @@ func (h *Handler) ListOrders(c *gin.Context) {
 	}
 
 	type orderRow struct {
-		Slug          string      `json:"slug"`
-		BuyerName     string      `json:"buyer_name"`
-		Email         string      `json:"email"`
-		Phone         string      `json:"phone"`
-		Currency      string      `json:"currency"`
-		TotalMinor    int         `json:"total_minor"`
-		Status        string      `json:"status"`
-		CreatedAt     time.Time   `json:"created_at"`
-		PaymentSlug   *string     `json:"payment_slug"`
-		PaymentStatus *string     `json:"payment_status"`
-		PaymentMethod *string     `json:"payment_method"`
-		Items         []orderItem `json:"items"`
+		HasMerchandise bool        `json:"has_merchandise"`
+		CollectedAt    *time.Time  `json:"collected_at"`
+		Slug           string      `json:"slug"`
+		BuyerName      string      `json:"buyer_name"`
+		Email          string      `json:"email"`
+		Phone          string      `json:"phone"`
+		Currency       string      `json:"currency"`
+		TotalMinor     int         `json:"total_minor"`
+		Status         string      `json:"status"`
+		CreatedAt      time.Time   `json:"created_at"`
+		PaymentSlug    *string     `json:"payment_slug"`
+		PaymentStatus  *string     `json:"payment_status"`
+		PaymentMethod  *string     `json:"payment_method"`
+		Items          []orderItem `json:"items"`
 	}
 
 	var orders []models.Order
@@ -580,15 +633,16 @@ func (h *Handler) ListOrders(c *gin.Context) {
 		orderIDs = append(orderIDs, order.ID)
 		index[order.ID] = i
 		rows = append(rows, orderRow{
-			Slug:       order.Slug.String(),
-			BuyerName:  order.BuyerName,
-			Email:      order.Email,
-			Phone:      order.Phone,
-			Currency:   order.Currency,
-			TotalMinor: order.TotalMinor,
-			Status:     order.Status,
-			CreatedAt:  order.CreatedAt,
-			Items:      []orderItem{},
+			CollectedAt: order.CollectedAt,
+			Slug:        order.Slug.String(),
+			BuyerName:   order.BuyerName,
+			Email:       order.Email,
+			Phone:       order.Phone,
+			Currency:    order.Currency,
+			TotalMinor:  order.TotalMinor,
+			Status:      order.Status,
+			CreatedAt:   order.CreatedAt,
+			Items:       []orderItem{},
 		})
 	}
 
@@ -596,6 +650,7 @@ func (h *Handler) ListOrders(c *gin.Context) {
 	type itemScanRow struct {
 		OrderID     uint
 		ProductName string
+		ProductType string
 		Qty         int
 		UnitPrice   int
 		LineTotal   int
@@ -606,7 +661,8 @@ func (h *Handler) ListOrders(c *gin.Context) {
 		Table("order_items").
 		Select(`
 			order_items.order_id,
-			products.name as product_name,
+			COALESCE(NULLIF(order_items.product_name,''),products.name) as product_name,
+ COALESCE(NULLIF(order_items.product_type,''),products.type) as product_type,
 			order_items.qty,
 			order_items.unit_price_minor as unit_price,
 			order_items.line_total_minor as line_total,
@@ -619,6 +675,9 @@ func (h *Handler) ListOrders(c *gin.Context) {
 			pos, ok := index[item.OrderID]
 			if !ok {
 				continue
+			}
+			if strings.EqualFold(item.ProductType, "MERCH") {
+				rows[pos].HasMerchandise = true
 			}
 			rows[pos].Items = append(rows[pos].Items, orderItem{
 				ProductName:   item.ProductName,
@@ -642,7 +701,7 @@ func (h *Handler) ListOrders(c *gin.Context) {
 		Table("payments").
 		Select("DISTINCT ON (order_id) order_id, slug, status, provider").
 		Where("order_id IS NOT NULL").
-		Order("order_id, created_at desc")
+		Order("order_id, CASE WHEN status = 'success' THEN 0 WHEN status = 'refunded' THEN 1 ELSE 2 END, created_at desc")
 	if err := h.DB.WithContext(c.Request.Context()).
 		Table("(?) as payments", paymentsSub).
 		Where("order_id IN ?", orderIDs).

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Handler exposes bib HTTP handlers.
@@ -61,30 +63,48 @@ func (h *Handler) AutoAssign(c *gin.Context) {
 		return
 	}
 
-	var categories []models.EventCategory
-	if err := h.DB.WithContext(c.Request.Context()).
-		Where("event_id = ?", event.ID).
-		Find(&categories).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load categories"})
-		return
-	}
-
-	categoryMap := make(map[uint]*models.EventCategory)
-	for i := range categories {
-		categoryMap[categories[i].ID] = &categories[i]
-	}
-
 	assigned := 0
 	err = h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		// Serialize allocation for this event and read counters under the lock.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&event, event.ID).Error; err != nil {
+			return err
+		}
+		var categories []models.EventCategory
+		if err := tx.Where("event_id = ?", event.ID).Find(&categories).Error; err != nil {
+			return err
+		}
+		categoryMap := make(map[uint]*models.EventCategory)
+		for i := range categories {
+			categoryMap[categories[i].ID] = &categories[i]
+		}
+		var existing []models.BibAssignment
+		if err := tx.Where("event_id = ?", event.ID).Find(&existing).Error; err != nil {
+			return err
+		}
+		occupied := make(map[int]bool)
+		for _, assignment := range existing {
+			occupied[assignment.BibNumber] = true
+		}
 		sub := tx.Model(&models.BibAssignment{}).Select("registration_id").Where("event_id = ?", event.ID)
 		var registrations []models.Registration
 		if err := tx.Where("event_id = ? AND status IN ('paid','confirmed')", event.ID).
 			Where("id NOT IN (?)", sub).
+			Order("created_at, id").
 			Find(&registrations).Error; err != nil {
 			return err
 		}
 
 		for _, registration := range registrations {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&registration, registration.ID).Error; err != nil {
+				return err
+			}
+			eligible, err := eligibleForRace(tx, registration)
+			if err != nil {
+				return err
+			}
+			if !eligible {
+				continue
+			}
 			if registration.CategoryID == nil {
 				continue
 			}
@@ -100,6 +120,10 @@ func (h *Handler) AutoAssign(c *gin.Context) {
 			if next == nil {
 				start := *category.BibRangeStart
 				next = &start
+			}
+
+			for *next <= *category.BibRangeEnd && occupied[*next] {
+				*next++
 			}
 
 			if *next > *category.BibRangeEnd {
@@ -119,7 +143,9 @@ func (h *Handler) AutoAssign(c *gin.Context) {
 				return err
 			}
 
+			occupied[*next] = true
 			nextValue := *next + 1
+			category.BibNext = &nextValue
 			if err := tx.Model(&models.EventCategory{}).
 				Where("id = ?", category.ID).
 				Update("bib_next", nextValue).Error; err != nil {
@@ -160,33 +186,102 @@ func (h *Handler) ManualAssign(c *gin.Context) {
 		return
 	}
 
-	var registration models.Registration
-	if err := h.DB.WithContext(c.Request.Context()).Where("slug = ? AND event_id = ?", regSlug, event.ID).First(&registration).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "registration not found"})
-		return
-	}
-
-	assignment := models.BibAssignment{
-		Slug:           uuid.New(),
-		EventID:        event.ID,
-		RegistrationID: registration.ID,
-		BibNumber:      req.BibNumber,
-		AssignedAt:     time.Now(),
-		AssignedBy:     pointerToUint(h.getActorID(c)),
-	}
-
-	created, err := h.Service.CreateAssignment(c.Request.Context(), assignment)
+	var assignment models.BibAssignment
+	created := false
+	err = h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&event, event.ID).Error; err != nil {
+			return err
+		}
+		var registration models.Registration
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("slug = ? AND event_id = ?", regSlug, event.ID).First(&registration).Error; err != nil {
+			return err
+		}
+		eligible, err := eligibleForRace(tx, registration)
+		if err != nil {
+			return err
+		}
+		if !eligible {
+			return errBibConflict
+		}
+		if registration.CategoryID == nil || req.BibNumber <= 0 {
+			return errBibConflict
+		}
+		var category models.EventCategory
+		if err := tx.Where("id = ? AND event_id = ?", *registration.CategoryID, event.ID).First(&category).Error; err != nil {
+			return err
+		}
+		if category.BibRangeStart == nil || category.BibRangeEnd == nil || req.BibNumber < *category.BibRangeStart || req.BibNumber > *category.BibRangeEnd {
+			return errBibConflict
+		}
+		if err := tx.Where("registration_id = ?", registration.ID).Limit(1).Find(&assignment).Error; err != nil {
+			return err
+		}
+		if assignment.ID != 0 {
+			if assignment.EventID != event.ID || assignment.BibNumber != req.BibNumber {
+				return errBibConflict
+			}
+			return nil
+		}
+		var count int64
+		if err := tx.Model(&models.BibAssignment{}).Where("event_id = ? AND bib_number = ?", event.ID, req.BibNumber).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return errBibConflict
+		}
+		assignment = models.BibAssignment{Slug: uuid.New(), EventID: event.ID, RegistrationID: registration.ID, BibNumber: req.BibNumber, AssignedAt: time.Now(), AssignedBy: pointerToUint(h.getActorID(c))}
+		if err := tx.Create(&assignment).Error; err != nil {
+			return err
+		}
+		created = true
+		value, _ := json.Marshal(assignment)
+		return audit.NewService(tx).Log(c.Request.Context(), audit.Entry{ActorUserID: h.getActorID(c), ActionKey: "bib.assign.manual", EntityType: "bib_assignment", EntityID: assignment.Slug.String(), NewJSON: value, IP: c.ClientIP(), UserAgent: c.GetHeader("User-Agent")})
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign bib"})
+		code, message := 500, "failed to assign bib"
+		if errors.Is(err, errBibConflict) {
+			code, message = 409, "bib requires an eligible entry, an available number in its category range, and no existing different assignment"
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code, message = 404, "registration or category not found in this event"
+		}
+		c.JSON(code, gin.H{"error": message})
 		return
 	}
+	code := http.StatusOK
+	if created {
+		code = http.StatusCreated
+	}
+	c.JSON(code, assignment)
+}
 
-	h.logAudit(c, "bib.assign.manual", "bib_assignment", created.Slug.String(), nil, created)
+var errBibConflict = errors.New("bib assignment conflict")
 
-	c.JSON(http.StatusCreated, created)
+func eligibleForRace(tx *gorm.DB, registration models.Registration) (bool, error) {
+	if registration.Status != "paid" && registration.Status != "confirmed" {
+		return false, nil
+	}
+	if registration.CategoryID == nil {
+		return true, nil
+	}
+	var category models.EventCategory
+	if err := tx.Where("id = ? AND event_id = ?", *registration.CategoryID, registration.EventID).First(&category).Error; err != nil {
+		return false, err
+	}
+	paid := category.PriceKESMinor != 0 || (category.PriceUSDMinor != nil && *category.PriceUSDMinor != 0) || (category.PriceEURMinor != nil && *category.PriceEURMinor != 0)
+	if !paid {
+		return true, nil
+	}
+	var count int64
+	err := tx.Model(&models.Payment{}).Where("registration_id = ? AND status = ? AND amount_minor > 0", registration.ID, "success").Count(&count).Error
+	return count > 0, err
 }
 
 func (h *Handler) LockBibs(c *gin.Context) {
+	event, err := h.getEventBySlugParam(c)
+	if err != nil {
+		return
+	}
 	var req lockRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
@@ -200,78 +295,113 @@ func (h *Handler) LockBibs(c *gin.Context) {
 	}
 
 	var assignment models.BibAssignment
-	if err := h.DB.WithContext(c.Request.Context()).
-		Joins("JOIN registrations ON registrations.id = bib_assignments.registration_id").
-		Where("registrations.slug = ?", regSlug).
-		First(&assignment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bib assignment not found"})
-		return
-	}
-
-	old := assignment
-	assignment.LockedAt = pointerToTime(time.Now())
-	assignment.LockReason = req.LockReason
-
-	updated, err := h.Service.UpdateAssignment(c.Request.Context(), assignment)
+	err = h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Joins("JOIN registrations ON registrations.id = bib_assignments.registration_id AND registrations.deleted_at IS NULL").
+			Where("registrations.slug = ? AND bib_assignments.event_id = ? AND registrations.event_id = ?", regSlug, event.ID, event.ID).
+			First(&assignment).Error; err != nil {
+			return err
+		}
+		if assignment.LockedAt != nil {
+			return nil
+		}
+		old, _ := json.Marshal(assignment)
+		assignment.LockedAt = pointerToTime(time.Now())
+		assignment.LockReason = req.LockReason
+		if err := tx.Model(&assignment).Select("locked_at", "lock_reason").Updates(&assignment).Error; err != nil {
+			return err
+		}
+		value, _ := json.Marshal(assignment)
+		return audit.NewService(tx).Log(c.Request.Context(), audit.Entry{ActorUserID: h.getActorID(c), ActionKey: "bib.lock", EntityType: "bib_assignment", EntityID: assignment.Slug.String(), OldJSON: old, NewJSON: value, IP: c.ClientIP(), UserAgent: c.GetHeader("User-Agent")})
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to lock bib"})
+		code, message := 500, "failed to lock bib"
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code, message = 404, "bib assignment not found in this event"
+		}
+		c.JSON(code, gin.H{"error": message})
 		return
 	}
-
-	h.logAudit(c, "bib.lock", "bib_assignment", updated.Slug.String(), old, updated)
-
-	c.JSON(http.StatusOK, updated)
+	c.JSON(http.StatusOK, assignment)
 }
 
 func (h *Handler) CheckIn(c *gin.Context) {
-	regSlug, err := uuid.Parse(c.Param("registrationId"))
+	slug, err := uuid.Parse(c.Param("registrationId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registration id"})
+		c.JSON(400, gin.H{"error": "invalid registration ID"})
 		return
 	}
-
-	var registration models.Registration
-	if err := h.DB.WithContext(c.Request.Context()).Where("slug = ?", regSlug).First(&registration).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "registration not found"})
-		return
-	}
-
-	var checkin models.Checkin
-	if err := h.DB.WithContext(c.Request.Context()).Where("registration_id = ?", registration.ID).First(&checkin).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			checkin = models.Checkin{Slug: uuid.New(), EventID: registration.EventID, RegistrationID: registration.ID}
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load check-in"})
-			return
-		}
-	}
-
 	var req checkinRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		c.JSON(400, gin.H{"error": "invalid check-in request"})
 		return
 	}
-
-	if req.CheckedIn {
+	var checkin models.Checkin
+	ineligible := errors.New("registration is not eligible for check-in")
+	noBib := errors.New("assign a bib before recording its collection")
+	err = h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		var registration models.Registration
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("slug = ?", slug).First(&registration).Error; err != nil {
+			return err
+		}
+		eligible, err := eligibleForRace(tx, registration)
+		if err != nil {
+			return err
+		}
+		if !eligible {
+			return ineligible
+		}
+		if req.BibCollected {
+			var count int64
+			if err := tx.Model(&models.BibAssignment{}).Where("registration_id = ? AND event_id = ?", registration.ID, registration.EventID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return noBib
+			}
+		}
+		if err := tx.Where("registration_id = ?", registration.ID).First(&checkin).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			checkin = models.Checkin{Slug: uuid.New(), RegistrationID: registration.ID, EventID: registration.EventID}
+		}
+		changed := false
 		now := time.Now()
-		checkin.CheckedInAt = &now
-		checkin.CheckedByUserID = pointerToUint(h.getActorID(c))
-	}
-	if req.BibCollected {
-		now := time.Now()
-		checkin.BibCollectedAt = &now
-	}
-	if req.PackCollected {
-		now := time.Now()
-		checkin.PackCollectedAt = &now
-	}
-
-	if err := h.DB.WithContext(c.Request.Context()).Save(&checkin).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update check-in"})
+		if req.CheckedIn && checkin.CheckedInAt == nil {
+			checkin.CheckedInAt = &now
+			checkin.CheckedByUserID = pointerToUint(h.getActorID(c))
+			changed = true
+		}
+		if req.BibCollected && checkin.BibCollectedAt == nil {
+			checkin.BibCollectedAt = &now
+			changed = true
+		}
+		if req.PackCollected && checkin.PackCollectedAt == nil {
+			checkin.PackCollectedAt = &now
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+		if err := tx.Save(&checkin).Error; err != nil {
+			return err
+		}
+		value, _ := json.Marshal(checkin)
+		return audit.NewService(tx).Log(c.Request.Context(), audit.Entry{ActorUserID: h.getActorID(c), ActionKey: "registration.checkin", EntityType: "registration", EntityID: slug.String(), NewJSON: value, IP: c.ClientIP(), UserAgent: c.GetHeader("User-Agent")})
+	})
+	if err != nil {
+		status, message := 500, "unable to record check-in"
+		if errors.Is(err, ineligible) || errors.Is(err, noBib) {
+			status, message = 409, err.Error()
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			status, message = 404, "registration or category not found"
+		}
+		c.JSON(status, gin.H{"error": message})
 		return
 	}
-
-	c.JSON(http.StatusOK, checkin)
+	c.JSON(200, checkin)
 }
 
 func (h *Handler) StartListExport(c *gin.Context) {

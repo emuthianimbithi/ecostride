@@ -1,9 +1,10 @@
 "use client"
 
 import { Suspense } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { apiFetchResponse, apiGet, apiPost } from "../../../lib/api-client"
+import { useAuth } from "../../../components/auth-provider"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
 import {
@@ -30,7 +31,7 @@ type Event = {
 type Registration = {
     slug: string
     athlete_name: string
-    email: string
+    eligible: boolean
     status: string
     category_name?: string
     bib_number?: number
@@ -54,6 +55,10 @@ function BibsPageInner() {
     })
     const [status, setStatus] = useState<string | null>(null)
     const { toast } = useToast()
+    const { hasPermission } = useAuth()
+    const [busy, setBusy] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const lookupRequest = useRef(0)
     const [error, setError] = useState<string | null>(null)
 
     // ✅ for inline (field-level) validation
@@ -63,7 +68,7 @@ function BibsPageInner() {
 
     const loadEvents = async () => {
         try {
-            const data = await apiGet<Event[]>("/admin/events")
+            const data = await apiGet<Event[]>("/admin/race-day/events")
             setEvents(Array.isArray(data) ? data : [])
         } catch (err) {
             toastApiError(toast, err)
@@ -72,13 +77,15 @@ function BibsPageInner() {
     }
 
     const loadRegistrations = async (event: Event) => {
+        const request = ++lookupRequest.current
+        setLoading(true)
         try {
-            const data = await apiGet<Registration[]>(`/admin/registrations?event_slug=${event.url_slug}`)
-            setRegistrations(Array.isArray(data) ? data : [])
+            const data = await apiGet<Registration[]>(`/admin/race-day/events/${event.slug}/entries?search=${encodeURIComponent(query.trim())}`)
+            if (request === lookupRequest.current) setRegistrations(Array.isArray(data) ? data : [])
         } catch (err) {
             toastApiError(toast, err)
-            setError(err instanceof Error ? err.message : "Failed to load registrations")
-        }
+            if (request === lookupRequest.current) setError(err instanceof Error ? err.message : "Failed to load registrations")
+        } finally { if (request === lookupRequest.current) setLoading(false) }
     }
 
     useEffect(() => {
@@ -95,21 +102,17 @@ function BibsPageInner() {
     }, [events, searchParams, selected_event_slug])
 
     useEffect(() => {
-        if (selectedEvent) void loadRegistrations(selectedEvent)
+        lookupRequest.current++
+        setLoading(true)
+        setRegistrations([])
+        setManualAssign({ registration_slug: "", bib_number: "" })
+        if (!selectedEvent) return
+        const timer = setTimeout(() => void loadRegistrations(selectedEvent), 250)
+        return () => clearTimeout(timer)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selected_event_slug])
+    }, [selected_event_slug, query])
 
-    const filtered = useMemo(() => {
-        if (!query.trim()) return registrations
-        const q = query.toLowerCase()
-        return registrations.filter(
-            (item) =>
-                item.athlete_name.toLowerCase().includes(q) ||
-                item.email.toLowerCase().includes(q) ||
-                (item.category_name ?? "").toLowerCase().includes(q) ||
-                (item.bib_number != null && item.bib_number.toString().includes(q))
-        )
-    }, [registrations, query])
+    const filtered = registrations
 
     const summary = useMemo(() => {
         const total = registrations.length
@@ -117,13 +120,7 @@ function BibsPageInner() {
         const pending = registrations.filter((reg) => reg.status === "pending_payment").length
         const bibAssigned = registrations.filter((reg) => reg.bib_number != null).length
         const checkedIn = registrations.filter((reg) => reg.checked_in_at).length
-        const revenue: Record<string, number> = {}
-        registrations.forEach((reg) => {
-            if (reg.payment_status !== "success") return
-            if (!reg.payment_currency || reg.payment_amount_minor == null) return
-            revenue[reg.payment_currency] = (revenue[reg.payment_currency] || 0) + reg.payment_amount_minor
-        })
-        return { total, paid, pending, bibAssigned, checkedIn, revenue }
+        return { total, paid, pending, bibAssigned, checkedIn }
     }, [registrations])
 
     const setFieldError = (key: string, message?: string) => {
@@ -140,6 +137,8 @@ function BibsPageInner() {
             setError("Choose an event first.")
             return
         }
+        if (busy) return
+        setBusy(true)
         setError(null)
         setStatus(null)
         try {
@@ -149,7 +148,7 @@ function BibsPageInner() {
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Auto-assign failed")
-        }
+        } finally { setBusy(false) }
     }
 
     const handleManualAssign = async () => {
@@ -180,6 +179,8 @@ function BibsPageInner() {
         if (!ok) return
 
         const bibNumber = Number(manualAssign.bib_number.trim())
+        if (busy) return
+        setBusy(true)
         setError(null)
         setStatus(null)
 
@@ -194,7 +195,7 @@ function BibsPageInner() {
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Manual assign failed")
-        }
+        } finally { setBusy(false) }
     }
 
     const handleExport = async (format: "csv" | "xlsx") => {
@@ -223,6 +224,8 @@ function BibsPageInner() {
         slug: string,
         payload: { checked_in?: boolean; bib_collected?: boolean; pack_collected?: boolean }
     ) => {
+        if (busy) return
+        setBusy(true)
         setError(null)
         setStatus(null)
         try {
@@ -232,7 +235,7 @@ function BibsPageInner() {
         } catch (err) {
             toastApiError(toast, err)
             setError(err instanceof Error ? err.message : "Failed to update check-in")
-        }
+        } finally { setBusy(false) }
     }
 
     return (
@@ -249,6 +252,7 @@ function BibsPageInner() {
                 <h2 className="text-lg font-semibold text-slate-800">Select Event</h2>
                 <select
                     value={selected_event_slug}
+                    disabled={busy}
                     onChange={(e) => setSelected_event_slug(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 >
@@ -268,11 +272,11 @@ function BibsPageInner() {
 
             {selectedEvent && (
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
-                    <h2 className="text-lg font-semibold text-slate-800">Event snapshot</h2>
+                    <h2 className="text-lg font-semibold text-slate-800">Current search</h2>
                     <div className="mt-4 grid gap-4 md:grid-cols-5">
                         {[
                             { label: "Registrations", value: summary.total },
-                            { label: "Paid / Confirmed", value: summary.paid },
+                            { label: "Confirmed entries", value: summary.paid },
                             { label: "Pending payment", value: summary.pending },
                             { label: "Bibs assigned", value: summary.bibAssigned },
                             { label: "Checked in", value: summary.checkedIn }
@@ -283,18 +287,11 @@ function BibsPageInner() {
                             </div>
                         ))}
                     </div>
-                    <div className="mt-4 text-sm text-slate-600">
-                        Revenue:{" "}
-                        {Object.keys(summary.revenue).length > 0
-                            ? Object.entries(summary.revenue)
-                                .map(([currency, amount]) => `${currency} ${(amount / 100).toFixed(2)}`)
-                                .join(" • ")
-                            : "No confirmed payments yet"}
-                    </div>
+                    <p className="mt-4 text-sm text-slate-600">Showing up to 100 matching entries. Search by name, reference, category or bib to find others.</p>
                 </section>
             )}
 
-            {selectedEvent && (
+            {selectedEvent && (hasPermission("bib.assign.auto") || hasPermission("bib.assign.manual")) && (
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -305,6 +302,7 @@ function BibsPageInner() {
                         {/* ✅ icons only (no layout change, just replaces text inside buttons) */}
                         <div className="flex flex-wrap gap-2">
                             <button
+                                disabled={busy || loading || !hasPermission("bib.assign.auto")}
                                 onClick={handleAutoAssign}
                                 className="inline-flex items-center justify-center rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
                                 aria-label="Auto-assign bibs"
@@ -313,6 +311,7 @@ function BibsPageInner() {
                                 <Sparkles className="h-4 w-4" />
                             </button>
                             <button
+                                disabled={!hasPermission("event.read")}
                                 onClick={() => handleExport("csv")}
                                 className="inline-flex items-center justify-center rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
                                 aria-label="Export CSV"
@@ -321,6 +320,7 @@ function BibsPageInner() {
                                 <Download className="h-4 w-4" />
                             </button>
                             <button
+                                disabled={!hasPermission("event.read")}
                                 onClick={() => handleExport("xlsx")}
                                 className="inline-flex items-center justify-center rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
                                 aria-label="Export XLSX"
@@ -369,6 +369,7 @@ function BibsPageInner() {
                         </div>
 
                         <button
+                            disabled={busy || loading || !hasPermission("bib.assign.manual")}
                             onClick={handleManualAssign}
                             className="inline-flex items-center justify-center rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
                             aria-label="Assign bib"
@@ -389,9 +390,10 @@ function BibsPageInner() {
                         </div>
                         <input
                             value={query}
+                            disabled={busy}
                             onChange={(e) => setQuery(e.target.value)}
                             className="rounded-full border border-slate-200 px-4 py-2 text-sm"
-                            placeholder="Search by name, email, category, or bib"
+                            placeholder="Search by name, reference, category, or bib"
                         />
                     </div>
 
@@ -412,10 +414,10 @@ function BibsPageInner() {
                                 <tr key={reg.slug} className="border-t border-slate-100">
                                     <td className="px-4 py-3">
                                         <div className="font-medium text-slate-800">{reg.athlete_name}</div>
-                                        <div className="text-xs text-slate-500">{reg.email}</div>
+                                        <div className="text-xs text-slate-500">{reg.slug}</div>
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">{reg.category_name ?? "-"}</td>
-                                    <td className="px-4 py-3 text-slate-600">{reg.payment_status ?? "pending"}</td>
+                                    <td className="px-4 py-3 text-slate-600">{reg.eligible ? "Eligible" : "Not eligible"}</td>
                                     <td className="px-4 py-3 text-slate-600">{reg.bib_number ?? "-"}</td>
                                     <td className="px-4 py-3 text-slate-600">
                                         <div>{reg.checked_in_at ? "Checked in" : "Not checked in"}</div>
@@ -428,8 +430,9 @@ function BibsPageInner() {
                                     {/* ✅ icons for actions, same visual language */}
                                     <td className="px-4 py-3 text-xs">
                                         <div className="flex flex-wrap gap-2">
-                                            {!reg.checked_in_at && (
+                                            {hasPermission("checkin.access") && !reg.checked_in_at && (
                                                 <button
+                                                    disabled={busy || loading || !reg.eligible}
                                                     onClick={() => updateCheckin(reg.slug, { checked_in: true })}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-forest transition hover:bg-slate-50"
                                                     aria-label="Check in"
@@ -438,8 +441,9 @@ function BibsPageInner() {
                                                     <CheckCircle2 className="h-4 w-4" />
                                                 </button>
                                             )}
-                                            {!reg.bib_collected_at && (
+                                            {hasPermission("checkin.access") && !reg.bib_collected_at && (
                                                 <button
+                                                    disabled={busy || loading || !reg.eligible}
                                                     onClick={() => updateCheckin(reg.slug, { bib_collected: true })}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-sky-600 transition hover:bg-slate-50"
                                                     aria-label="Mark bib collected"
@@ -448,8 +452,9 @@ function BibsPageInner() {
                                                     <ClipboardCheck className="h-4 w-4" />
                                                 </button>
                                             )}
-                                            {!reg.pack_collected_at && (
+                                            {hasPermission("checkin.access") && !reg.pack_collected_at && (
                                                 <button
+                                                    disabled={busy || loading || !reg.eligible}
                                                     onClick={() => updateCheckin(reg.slug, { pack_collected: true })}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-50"
                                                     aria-label="Mark pack collected"
@@ -466,7 +471,7 @@ function BibsPageInner() {
                             {filtered.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-                                        No registrations yet.
+                                        {loading ? "Loading entries…" : "No matching registrations."}
                                     </td>
                                 </tr>
                             )}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/webhook"
 	"gorm.io/gorm"
 )
@@ -70,11 +71,15 @@ func TestStripeWebhookSignatureVerification(t *testing.T) {
 		}
 
 		payload := map[string]interface{}{
-			"id":   "evt_test",
-			"type": "checkout.session.completed",
+			"id":          "evt_test",
+			"api_version": stripe.APIVersion,
+			"type":        "checkout.session.completed",
 			"data": map[string]interface{}{
 				"object": map[string]interface{}{
-					"id": "cs_test_123",
+					"id":             "cs_test_123",
+					"payment_status": "paid",
+					"amount_total":   1500,
+					"currency":       "kes",
 					"metadata": map[string]string{
 						"payment_slug": payment.Slug.String(),
 					},
@@ -101,7 +106,7 @@ func TestStripeWebhookSignatureVerification(t *testing.T) {
 		router.ServeHTTP(recorder, req)
 
 		if recorder.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", recorder.Code)
+			t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 		}
 
 		var updated models.Payment
@@ -127,8 +132,9 @@ func TestStripeWebhookSignatureVerification(t *testing.T) {
 		if err := db.Where("payment_id = ?", payment.ID).First(&receipt).Error; err != nil {
 			t.Fatalf("receipt not found: %v", err)
 		}
-		if receipt.PDFMediaID == nil {
-			t.Fatalf("expected receipt pdf media")
+		var count int64
+		if err := db.Model(&models.Job{}).Where("type IN ?", []string{"receipt.email", "receipt.pdf"}).Count(&count).Error; err != nil || count != 2 {
+			t.Fatalf("expected durable receipt jobs, got %d: %v", count, err)
 		}
 	})
 }

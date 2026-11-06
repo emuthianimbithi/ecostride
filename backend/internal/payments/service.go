@@ -14,6 +14,7 @@ import (
 
 	"ecostride/backend/internal/common/config"
 	"ecostride/backend/internal/common/models"
+	"ecostride/backend/internal/jobs"
 	"ecostride/backend/internal/receipts"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 	"github.com/stripe/stripe-go/v76/refund"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -32,6 +34,7 @@ var (
 
 // Service handles payment operations.
 type Service struct {
+	PesaPal           *PesaPalClient
 	DB                *gorm.DB
 	Config            config.Config
 	Receipts          *receipts.Service
@@ -41,7 +44,7 @@ type Service struct {
 }
 
 func NewService(db *gorm.DB, cfg config.Config, receiptsService *receipts.Service) *Service {
-	return &Service{DB: db, Config: cfg, Receipts: receiptsService}
+	return &Service{DB: db, Config: cfg, Receipts: receiptsService, PesaPal: NewPesaPalClient(cfg)}
 }
 
 type PaymentContext struct {
@@ -73,17 +76,6 @@ func (s *Service) FindPaymentBySlug(ctx context.Context, slug uuid.UUID) (models
 		return models.Payment{}, ErrPaymentNotFound
 	}
 	return payment, nil
-}
-
-func (s *Service) EnsureIdempotency(ctx context.Context, key string) (*models.Payment, error) {
-	if key == "" {
-		return nil, nil
-	}
-	var payment models.Payment
-	if err := s.DB.WithContext(ctx).Where("idempotency_key = ?", key).First(&payment).Error; err == nil {
-		return &payment, nil
-	}
-	return nil, nil
 }
 
 func (s *Service) BuildRegistrationContext(ctx context.Context, registrationSlug uuid.UUID, currency string) (PaymentContext, error) {
@@ -127,9 +119,7 @@ func (s *Service) BuildOrderContext(ctx context.Context, orderSlug uuid.UUID) (P
 		return PaymentContext{}, fmt.Errorf("order not found")
 	}
 
-	if order.Status == "paid" || order.Status == "refunded" {
-		return PaymentContext{}, fmt.Errorf("order not payable")
-	}
+	// Eligibility is rechecked under a row lock when claiming a new attempt.
 
 	currency, err := validateCurrency(order.Currency)
 	if err != nil {
@@ -171,16 +161,19 @@ func (s *Service) CreatePayment(ctx context.Context, provider string, ctxData Pa
 }
 
 func (s *Service) UpdatePayment(ctx context.Context, payment models.Payment, providerRef string, metadata map[string]interface{}) (models.Payment, error) {
-	if providerRef != "" {
-		payment.ProviderRef = providerRef
-	}
-	if metadata != nil {
-		payment.Metadata = mergeMetadata(payment.Metadata, metadata)
-	}
-	if err := s.DB.WithContext(ctx).Save(&payment).Error; err != nil {
-		return models.Payment{}, err
-	}
-	return payment, nil
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, payment.ID).Error; err != nil {
+			return err
+		}
+		if providerRef != "" {
+			payment.ProviderRef = providerRef
+		}
+		if metadata != nil {
+			payment.Metadata = mergeMetadata(payment.Metadata, metadata)
+		}
+		return tx.Save(&payment).Error
+	})
+	return payment, err
 }
 
 func (s *Service) CreateStripeSession(ctx context.Context, payment models.Payment, ctxData PaymentContext, successURL, cancelURL, idempotencyKey string) (StripeSessionResult, error) {
@@ -289,59 +282,121 @@ func (s *Service) InitiateMpesaSTK(ctx context.Context, payment models.Payment, 
 }
 
 func (s *Service) MarkPaymentSuccess(ctx context.Context, payment models.Payment) (models.Payment, error) {
-	return payment, s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if payment.Status != "success" {
-			payment.Status = "success"
-			if err := tx.Save(&payment).Error; err != nil {
-				return err
-			}
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, payment.ID).Error; err != nil {
+			return err
 		}
-
+		if payment.Status == "refunded" || payment.Status == "chargeback" {
+			return nil
+		}
+		payment.Status = "success"
+		email := ""
 		if payment.RegistrationID != nil {
 			var registration models.Registration
-			if err := tx.Where("id = ?", *payment.RegistrationID).First(&registration).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&registration, *payment.RegistrationID).Error; err != nil {
 				return err
 			}
-			if registration.Status != "confirmed" {
-				registration.Status = "confirmed"
-				if err := tx.Save(&registration).Error; err != nil {
+			email = registration.Email
+			if registration.Status == "cancelled" || registration.Status == "refunded" {
+				payment.Metadata = mergeMetadata(payment.Metadata, map[string]interface{}{"requires_review": true, "review_reason": "payment_received_for_ineligible_registration"})
+			} else if registration.Status != "confirmed" {
+				if err := tx.Model(&registration).Update("status", "confirmed").Error; err != nil {
 					return err
 				}
 			}
-			_, _ = s.Receipts.IssueReceipt(ctx, payment, registration.Email)
 		}
-
 		if payment.OrderID != nil {
 			var order models.Order
-			if err := tx.Where("id = ?", *payment.OrderID).First(&order).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, *payment.OrderID).Error; err != nil {
 				return err
 			}
-			if order.Status != "paid" {
-				order.Status = "paid"
-				if err := tx.Save(&order).Error; err != nil {
+			email = order.Email
+			if order.Status == "cancelled" || order.Status == "refunded" || (order.Status == "pending" && order.ReservationExpiresAt != nil && time.Now().After(*order.ReservationExpiresAt)) {
+				payment.Metadata = mergeMetadata(payment.Metadata, map[string]interface{}{"requires_review": true, "review_reason": "payment_received_for_ineligible_order"})
+			} else if order.Status != "paid" {
+				if err := tx.Model(&order).Update("status", "paid").Error; err != nil {
 					return err
 				}
 			}
-			_, _ = s.Receipts.IssueReceipt(ctx, payment, order.Email)
 		}
-
+		if err := tx.Save(&payment).Error; err != nil {
+			return err
+		}
+		// Receipt and delivery jobs commit together with payment and eligibility.
+		if s.Receipts != nil {
+			service := receipts.NewService(tx, s.Receipts.Config, jobs.NewService(tx))
+			if _, err := service.IssueReceipt(ctx, payment, email); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+	return payment, err
 }
 
 func (s *Service) MarkPaymentFailed(ctx context.Context, payment models.Payment) (models.Payment, error) {
-	if payment.Status == "failed" {
-		return payment, nil
-	}
-	payment.Status = "failed"
-	if err := s.DB.WithContext(ctx).Save(&payment).Error; err != nil {
-		return models.Payment{}, err
-	}
-	return payment, nil
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, payment.ID).Error; err != nil {
+			return err
+		}
+		if payment.Status != "pending" && payment.Status != "processing" {
+			return nil
+		}
+		payment.Status = "failed"
+		return tx.Save(&payment).Error
+	})
+	return payment, err
+}
+
+// ProcessNotification records completion only after every transactional effect
+// succeeds. Old event rows lacking processed_at are safe to resume.
+func (s *Service) ProcessNotification(ctx context.Context, payment models.Payment, eventID, eventType string, payload []byte, metadata map[string]interface{}, success bool, outcome ...string) (models.Payment, error) {
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, payment.ID).Error; err != nil {
+			return err
+		}
+		event := models.PaymentEvent{Slug: uuid.New(), PaymentID: payment.ID, ProviderEventID: eventID, Type: eventType, Payload: datatypes.JSON(payload), ReceivedAt: time.Now()}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "provider_event_id"}}, DoNothing: true}).Create(&event).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("provider_event_id = ?", eventID).First(&event).Error; err != nil {
+			return err
+		}
+		if event.PaymentID != payment.ID {
+			return errors.New("payment event target mismatch")
+		}
+		if event.ProcessedAt != nil {
+			return nil
+		}
+		scoped := *s
+		scoped.DB = tx
+		var err error
+		payment, err = scoped.UpdatePayment(ctx, payment, "", metadata)
+		if err != nil {
+			return err
+		}
+		if len(outcome) > 0 && outcome[0] == "refunded" {
+			payment, err = scoped.MarkPaymentRefunded(ctx, payment)
+		} else if len(outcome) > 0 && outcome[0] == "pending" {
+			// INVALID is not authoritative failure. Preserve current payment status.
+		} else if success {
+			payment, err = scoped.MarkPaymentSuccess(ctx, payment)
+		} else {
+			payment, err = scoped.MarkPaymentFailed(ctx, payment)
+		}
+		if err != nil {
+			return err
+		}
+		return tx.Model(&event).Update("processed_at", time.Now()).Error
+	})
+	return payment, err
 }
 
 func (s *Service) MarkPaymentRefunded(ctx context.Context, payment models.Payment) (models.Payment, error) {
-	return payment, s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, payment.ID).Error; err != nil {
+			return err
+		}
 		if payment.Status != "refunded" {
 			payment.Status = "refunded"
 			if err := tx.Save(&payment).Error; err != nil {
@@ -377,6 +432,7 @@ func (s *Service) MarkPaymentRefunded(ctx context.Context, payment models.Paymen
 
 		return nil
 	})
+	return payment, err
 }
 
 func (s *Service) RefundStripe(ctx context.Context, payment models.Payment, amountMinor *int, reason string) (string, map[string]interface{}, error) {

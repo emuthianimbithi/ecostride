@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Clock3 } from "lucide-react"
+import { ArrowRight, Clock3, Shirt } from "lucide-react"
 import { EditorialCard } from "../components/editorial-card"
 import { Eyebrow } from "../components/eyebrow"
 import { MalindiHero } from "../components/malindi-hero"
@@ -8,6 +8,8 @@ import { Reveal } from "../components/reveal"
 import { ResponsiveMedia, isVideoMedia } from "../components/responsive-media"
 import { Section } from "../components/section"
 import { formatDate, registrationWindowLabel } from "../lib/format"
+import { normalizeProduct } from "../lib/normalize-product"
+import { formatMoney } from "../lib/format"
 import { serverGet } from "../lib/api-server"
 
 type EventApi = {
@@ -144,12 +146,15 @@ function featuredEventHeroMedia(event?: EventApi) {
 }
 
 export default async function HomePage() {
-  const [events, posts, albums, sponsors] = await Promise.all([
+  const [events, posts, albums, sponsors, products] = await Promise.all([
     serverGet<EventApi[]>("/public/events", { next: { revalidate: 60 } }).catch(() => []),
     serverGet<PostApi[]>("/public/posts", { next: { revalidate: 60 } }).catch(() => []),
     serverGet<AlbumApi[]>("/public/gallery/albums", { next: { revalidate: 60 } }).catch(() => []),
-    serverGet<SponsorApi[]>("/public/sponsors?placement=HOME_STRIP", { next: { revalidate: 60 } }).catch(() => [])
+    serverGet<SponsorApi[]>("/public/sponsors?placement=HOME_STRIP", { next: { revalidate: 60 } }).catch(() => []),
+    serverGet<unknown[]>("/public/shop/products", { next: { revalidate: 60 } }).catch(() => [])
   ])
+
+  const merchandise = products.map(normalizeProduct).filter(product => product.active && product.type.toUpperCase() === "MERCH").slice(0, 3)
 
   const upcomingEvents = [...events]
     .filter((event) => event.start_at)
@@ -457,6 +462,20 @@ export default async function HomePage() {
             ))}
           </div>
         </Reveal>
+      </Section>
+
+      <Section tone="sand" id="support-us">
+        <div className="space-y-10">
+          <div className="max-w-3xl space-y-4"><Eyebrow>Support us</Eyebrow><h2 className="font-display text-h1 text-forest-900 md:text-display-lg">There’s more than one way to take part.</h2><p className="text-base leading-8 text-muted-foreground">Join in from wherever you are, or wear your support with EcoStride merchandise.</p></div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <Link href="/support#virtual-participation" className="rounded-2xl border border-sand-300 bg-background p-7 transition hover:border-forest-500"><h3 className="font-display text-h2">Virtual participation</h3><p className="mt-3 leading-7 text-muted-foreground">Support EcoStride’s coastal work from anywhere.</p><span className="mt-5 inline-flex items-center gap-2 font-semibold text-tide-700">Support us <ArrowRight className="h-4 w-4" /></span></Link>
+            <Link href="/shop" className="rounded-2xl border border-sand-300 bg-background p-7 transition hover:border-forest-500"><h3 className="font-display text-h2">The EcoStride shop</h3><p className="mt-3 leading-7 text-muted-foreground">Browse merchandise, buy securely, and keep your receipt for collection.</p><span className="mt-5 inline-flex items-center gap-2 font-semibold text-tide-700">Browse the shop <ArrowRight className="h-4 w-4" /></span></Link>
+          </div>
+          {merchandise.length > 0 && <div className="grid gap-6 sm:grid-cols-3">{merchandise.map(product => <Link key={product.slug} href={`/shop#product-${product.slug}`} className="overflow-hidden rounded-2xl border border-sand-200 bg-white">
+            {product.image_url ? <ResponsiveMedia src={product.image_url} alt={product.image_alt || product.name} className="aspect-square" fillMode="cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-sand-100"><Shirt className="h-16 w-16 text-forest-700" aria-hidden="true" /></div>}
+            <div className="space-y-2 p-5"><h3 className="font-display text-xl">{product.name}</h3><p className="text-sm text-muted-foreground">{product.stock_qty === 0 ? "Sold out" : product.price_kes_minor ? formatMoney("KES", product.price_kes_minor) : "View in shop"}</p></div>
+          </Link>)}</div>}
+        </div>
       </Section>
 
       <Section tone="forest">

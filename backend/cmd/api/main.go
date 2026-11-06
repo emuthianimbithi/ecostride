@@ -37,6 +37,9 @@ func init() {
 
 func main() {
 	cfg := config.Load()
+	if err := payments.ValidatePesaPalConfig(cfg); err != nil {
+		log.Fatalf("PesaPal config: %v", err)
+	}
 	conn, err := db.Connect(cfg)
 	if err != nil {
 		log.Fatalf("db connect failed: %v", err)
@@ -79,6 +82,7 @@ func main() {
 
 	registerJobHandlers(jobsService, receiptService, conn, cfg)
 	go jobsService.RunWorker(context.Background(), 2*time.Second)
+	go paymentsService.RunPesaPalRecovery(context.Background())
 
 	handlers := httpserver.Handlers{
 		Auth:          authHandler,

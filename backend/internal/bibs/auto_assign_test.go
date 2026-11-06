@@ -68,6 +68,11 @@ func TestAutoAssignBibs(t *testing.T) {
 		t.Fatalf("create registrations: %v", err)
 	}
 
+	for _, reg := range registrations {
+		if err := db.Create(&models.Payment{Slug: uuid.New(), RegistrationID: &reg.ID, Provider: "PESAPAL", Status: "success", Currency: "KES", AmountMinor: 1000}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	handler := NewHandler(NewService(db), audit.NewService(db), db)
 
 	gin.SetMode(gin.TestMode)
@@ -97,6 +102,19 @@ func TestAutoAssignBibs(t *testing.T) {
 	}
 	if !assignedNumbers[100] || !assignedNumbers[101] {
 		t.Fatalf("unexpected bib numbers: %+v", assignedNumbers)
+	}
+
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest("POST", "/bibs/auto-assign", nil)
+	ctx.Params = gin.Params{{Key: "id", Value: event.Slug.String()}}
+	handler.AutoAssign(ctx)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("repeat failed: %d %s", recorder.Code, recorder.Body)
+	}
+	var count int64
+	if err := db.Model(&models.BibAssignment{}).Count(&count).Error; err != nil || count != 2 {
+		t.Fatalf("repeat changed assignments: %d %v", count, err)
 	}
 
 	var updated models.EventCategory

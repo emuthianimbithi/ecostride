@@ -14,7 +14,7 @@ import (
 const authContextKey = "authClaims"
 
 // RequireAuth validates JWT access tokens and injects claims into the request context.
-func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
+func RequireAuth(manager *auth.Manager, service *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authorization := c.GetHeader("Authorization")
 		if authorization == "" {
@@ -33,6 +33,13 @@ func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 			apierrors.AbortWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "invalid token", nil)
 			return
 		}
+		// Recheck active status and current grants; JWT permissions may be stale.
+		profile, err := service.ValidateAccess(c.Request.Context(), claims)
+		if err != nil || profile.Slug != claims.UserSlug.String() {
+			apierrors.AbortWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "account unavailable", nil)
+			return
+		}
+		claims.Permissions = profile.Permissions
 
 		c.Set(authContextKey, claims)
 		c.Next()
@@ -41,6 +48,10 @@ func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 
 // RequirePermission enforces RBAC permissions at the route level.
 func RequirePermission(permission string) gin.HandlerFunc {
+	return RequireAnyPermission(permission)
+}
+
+func RequireAnyPermission(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claimsValue, exists := c.Get(authContextKey)
 		if !exists {
@@ -54,7 +65,14 @@ func RequirePermission(permission string) gin.HandlerFunc {
 			return
 		}
 
-		if !rbac.HasPermission(claims.Permissions, permission) {
+		allowed := false
+		for _, permission := range permissions {
+			if rbac.HasPermission(claims.Permissions, permission) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
 			apierrors.AbortWithError(c, http.StatusForbidden, "FORBIDDEN", "insufficient permissions", nil)
 			return
 		}

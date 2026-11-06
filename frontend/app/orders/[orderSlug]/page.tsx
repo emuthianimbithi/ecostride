@@ -61,7 +61,7 @@ export default function Page() {
                     name: data.buyer_name,
                     email: data.email,
                     currency: data.currency,
-                    amount_minor: data.total_minor / 100,
+                    amount_minor: data.total_minor,
                     created_at: data.CreatedAt
                 })
             } catch (err) {

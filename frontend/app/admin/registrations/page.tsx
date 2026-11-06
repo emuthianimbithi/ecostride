@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { apiFetchResponse, apiGet, apiPost } from "../../../lib/api-client"
+import { useAuth } from "../../../components/auth-provider"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
 import { Download, Eye, Mail, Receipt, Settings2, X, XCircle } from "lucide-react"
@@ -130,6 +131,7 @@ function normalizeAudit(log: AuditLog) {
 function RegistrationsPageInner() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { hasPermission } = useAuth()
 
   const [items, setItems] = useState<Registration[]>([])
   const [events, setEvents] = useState<Event[]>([])
@@ -277,7 +279,13 @@ function RegistrationsPageInner() {
     setError(null)
     setStatus(null)
     try {
-      await apiPost(path, {})
+      let body: Record<string, string> = {}
+      if (path.endsWith("/resend-receipt")) {
+        const reason = window.prompt("Reason for resending this receipt to the saved recipient")?.trim()
+        if (!reason) return
+        body = { reason }
+      }
+      await apiPost(path, body)
       setStatus(successMessage)
       await Promise.all([loadRegistrations(), loadAudit()])
     } catch (err) {
@@ -567,7 +575,7 @@ function RegistrationsPageInner() {
                         <Mail className="h-4 w-4" />
                       </button>
 
-                      {item.payment_status === "success" && (
+                      {hasPermission("payment.receipt.resend") && item.payment_status === "success" && (
                         <button
                           onClick={() => handleAction(`/admin/registrations/${item.slug}/resend-receipt`, "Receipt queued")}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-sky-600 transition hover:bg-slate-50"
@@ -578,7 +586,7 @@ function RegistrationsPageInner() {
                         </button>
                       )}
 
-                      {item.status !== "cancelled" && (
+                      {hasPermission("registration.cancel") && item.status !== "cancelled" && (
                         <button
                           onClick={() => setCancelTarget(item)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-rose-600 transition hover:bg-slate-50"

@@ -10,6 +10,7 @@ import (
 	"ecostride/backend/internal/common/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -73,35 +74,33 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (Tokens, Pro
 		return Tokens{}, Profile{}, ErrTokenInvalid
 	}
 
-	refreshHash := hashToken(refreshToken)
-
-	var stored models.RefreshToken
-	if err := s.DB.WithContext(ctx).
-		Where("user_id = ? AND token_hash = ?", claims.UserID, refreshHash).
-		First(&stored).Error; err != nil {
-		return Tokens{}, Profile{}, ErrTokenInvalid
-	}
-
-	if stored.RevokedAt != nil || time.Now().After(stored.ExpiresAt) {
-		return Tokens{}, Profile{}, ErrTokenInvalid
-	}
-
-	now := time.Now()
-	if err := s.DB.WithContext(ctx).Model(&stored).Update("revoked_at", &now).Error; err != nil {
-		return Tokens{}, Profile{}, err
-	}
-
-	user, permissions, roles, err := s.loadUserByID(ctx, claims.UserID)
-	if err != nil {
-		return Tokens{}, Profile{}, ErrInvalidCredentials
-	}
-
-	accessToken, newRefreshToken, err := s.issueTokens(ctx, user, permissions)
-	if err != nil {
-		return Tokens{}, Profile{}, err
-	}
-
-	return Tokens{AccessToken: accessToken, RefreshToken: newRefreshToken}, buildProfile(user, roles, permissions), nil
+	var tokens Tokens
+	var profile Profile
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stored models.RefreshToken
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND token_hash = ?", claims.UserID, hashToken(refreshToken)).First(&stored).Error; err != nil {
+			return ErrTokenInvalid
+		}
+		if stored.RevokedAt != nil || time.Now().After(stored.ExpiresAt) {
+			return ErrTokenInvalid
+		}
+		local := NewService(tx, s.JWT)
+		user, permissions, roles, err := local.loadUserByID(ctx, claims.UserID)
+		if err != nil || !user.IsActive || user.Slug != claims.UserSlug || user.AuthVersion != claims.AuthVersion {
+			return ErrInactiveAccount
+		}
+		if err := tx.Model(&stored).Update("revoked_at", time.Now()).Error; err != nil {
+			return err
+		}
+		access, refresh, err := local.issueTokens(ctx, user, permissions)
+		if err != nil {
+			return err
+		}
+		tokens = Tokens{AccessToken: access, RefreshToken: refresh}
+		profile = buildProfile(user, roles, permissions)
+		return nil
+	})
+	return tokens, profile, err
 }
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) (uint, error) {
@@ -128,17 +127,31 @@ func (s *Service) Profile(ctx context.Context, userID uint) (Profile, error) {
 	if err != nil {
 		return Profile{}, err
 	}
+	if !user.IsActive {
+		return Profile{}, ErrInactiveAccount
+	}
 
 	return buildProfile(user, roles, permissions), nil
 }
 
+func (s *Service) ValidateAccess(ctx context.Context, claims *Claims) (Profile, error) {
+	user, permissions, roles, err := s.loadUserByID(ctx, claims.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
+	if !user.IsActive || user.Slug != claims.UserSlug || user.AuthVersion != claims.AuthVersion {
+		return Profile{}, ErrInactiveAccount
+	}
+	return buildProfile(user, roles, permissions), nil
+}
+
 func (s *Service) issueTokens(ctx context.Context, user models.User, permissions []string) (string, string, error) {
-	accessToken, err := s.JWT.SignAccessToken(user.ID, user.Slug, permissions)
+	accessToken, err := s.JWT.SignAccessToken(user.ID, user.Slug, permissions, user.AuthVersion)
 	if err != nil {
 		return "", "", err
 	}
 
-	refreshToken, err := s.JWT.SignRefreshToken(user.ID, user.Slug)
+	refreshToken, err := s.JWT.SignRefreshToken(user.ID, user.Slug, user.AuthVersion)
 	if err != nil {
 		return "", "", err
 	}

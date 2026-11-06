@@ -11,6 +11,7 @@ import (
 	"ecostride/backend/internal/jobs"
 	"ecostride/backend/internal/receipts"
 	"ecostride/backend/internal/registrations"
+	"ecostride/backend/internal/shop"
 
 	"gorm.io/gorm"
 )
@@ -21,6 +22,15 @@ type volunteerBroadcastPayload struct {
 }
 
 func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Service, db *gorm.DB, cfg config.Config) {
+	jobService.Register("order.expire", func(ctx context.Context, job models.Job) error {
+		var payload struct {
+			OrderID uint `json:"order_id"`
+		}
+		if err := json.Unmarshal(job.Payload, &payload); err != nil {
+			return err
+		}
+		return shop.NewService(db).ExpireOrder(ctx, payload.OrderID)
+	})
 	jobService.Register("receipt.email", func(ctx context.Context, job models.Job) error {
 		var payload receipts.ReceiptJobPayload
 		if err := json.Unmarshal(job.Payload, &payload); err != nil {
@@ -37,7 +47,7 @@ func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Serv
 			return err
 		}
 
-		if payload.Email == "" {
+		if payload.Email == "" || (receipt.DeliveredEmailAt != nil && !payload.Resend) {
 			return nil
 		}
 
@@ -46,8 +56,7 @@ func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Serv
 		}
 
 		now := time.Now()
-		_ = db.WithContext(ctx).Model(&receipt).Update("delivered_email_at", &now).Error
-		return nil
+		return db.WithContext(ctx).Model(&receipt).Update("delivered_email_at", &now).Error
 	})
 
 	jobService.Register("receipt.pdf", func(ctx context.Context, job models.Job) error {
@@ -64,6 +73,10 @@ func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Serv
 		var payment models.Payment
 		if err := db.WithContext(ctx).Where("id = ?", payload.PaymentID).First(&payment).Error; err != nil {
 			return err
+		}
+
+		if receipt.PDFMediaID != nil {
+			return nil
 		}
 
 		if err := receiptService.GenerateReceiptPDF(ctx, &receipt, payment); err != nil {

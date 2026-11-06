@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -67,8 +68,12 @@ func (s *Service) IssueReceipt(ctx context.Context, payment models.Payment, emai
 			PaymentID: payment.ID,
 			Email:     email,
 		}
-		_, _ = s.Jobs.Enqueue(ctx, "receipt.email", payload, time.Now())
-		_, _ = s.Jobs.Enqueue(ctx, "receipt.pdf", payload, time.Now())
+		if _, err := s.Jobs.Enqueue(ctx, "receipt.email", payload, time.Now()); err != nil {
+			return models.Receipt{}, err
+		}
+		if _, err := s.Jobs.Enqueue(ctx, "receipt.pdf", payload, time.Now()); err != nil {
+			return models.Receipt{}, err
+		}
 		return receipt, nil
 	}
 
@@ -89,6 +94,7 @@ func (s *Service) IssueReceipt(ctx context.Context, payment models.Payment, emai
 }
 
 type ReceiptJobPayload struct {
+	Resend    bool   `json:"resend,omitempty"`
 	ReceiptID uint   `json:"receipt_id"`
 	PaymentID uint   `json:"payment_id"`
 	Email     string `json:"email"`
@@ -157,19 +163,27 @@ func (s *Service) buildReceiptDetails(ctx context.Context, receipt models.Receip
 
 	if payment.RegistrationID != nil {
 		var row struct {
-			AthleteName  string
-			Email        string
-			EventTitle   string
-			EventStartAt *time.Time
-			CategoryName *string
+			RegistrationSlug string
+			EventLocation    string
+			AthleteName      string
+			Email            string
+			EventTitle       string
+			EventStartAt     *time.Time
+			CategoryName     *string
 		}
 		_ = s.DB.WithContext(ctx).
 			Table("registrations").
-			Select(`registrations.athlete_name, registrations.email, events.title as event_title, events.start_at as event_start_at, event_categories.name as category_name`).
+			Select(`registrations.slug as registration_slug, registrations.athlete_name, registrations.email, events.title as event_title, events.location as event_location, events.start_at as event_start_at, event_categories.name as category_name`).
 			Joins("LEFT JOIN events ON events.id = registrations.event_id").
 			Joins("LEFT JOIN event_categories ON event_categories.id = registrations.category_id").
 			Where("registrations.id = ?", *payment.RegistrationID).
 			Scan(&row).Error
+		if row.RegistrationSlug != "" {
+			contextLines = append(contextLines, "Registration reference: "+row.RegistrationSlug)
+		}
+		if row.EventLocation != "" {
+			contextLines = append(contextLines, "Location: "+row.EventLocation)
+		}
 		payerName = row.AthleteName
 		if row.Email != "" {
 			payerEmail = row.Email
@@ -189,6 +203,7 @@ func (s *Service) buildReceiptDetails(ctx context.Context, receipt models.Receip
 	if payment.OrderID != nil {
 		var order models.Order
 		if err := s.DB.WithContext(ctx).Where("id = ?", *payment.OrderID).First(&order).Error; err == nil {
+			contextLines = append(contextLines, "Order reference: "+order.Slug.String())
 			payerName = order.BuyerName
 			if order.Email != "" {
 				payerEmail = order.Email
@@ -203,7 +218,7 @@ func (s *Service) buildReceiptDetails(ctx context.Context, receipt models.Receip
 		var items []itemRow
 		_ = s.DB.WithContext(ctx).
 			Table("order_items").
-			Select("products.name as product_name, order_items.qty, order_items.line_total_minor as line_total").
+			Select("COALESCE(NULLIF(order_items.product_name,''),products.name) as product_name, order_items.qty, order_items.line_total_minor as line_total").
 			Joins("LEFT JOIN products ON products.id = order_items.product_id").
 			Where("order_items.order_id = ?", *payment.OrderID).
 			Scan(&items).Error
@@ -216,6 +231,12 @@ func (s *Service) buildReceiptDetails(ctx context.Context, receipt models.Receip
 		}
 	}
 
+	var metadata map[string]interface{}
+	if json.Unmarshal(payment.Metadata, &metadata) == nil {
+		if confirmation, ok := metadata["confirmation_code"].(string); ok && confirmation != "" {
+			contextLines = append(contextLines, "Payment confirmation: "+confirmation)
+		}
+	}
 	payerLine := "Payer: " + payerName
 	if payerEmail != "" {
 		payerLine = payerLine + fmt.Sprintf(" <%s>", payerEmail)

@@ -17,7 +17,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	authGroup.POST("/login", RateLimit("auth.login", 5, time.Minute), handlers.Auth.Login)
 	authGroup.POST("/refresh", handlers.Auth.Refresh)
 	authGroup.POST("/logout", handlers.Auth.Logout)
-	api.GET("/me", RequireAuth(authManager), handlers.Auth.Me)
+	api.GET("/me", RequireAuth(authManager, handlers.Auth.Service), handlers.Auth.Me)
 
 	// Public CMS + site
 	public := api.Group("/public")
@@ -46,6 +46,11 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.GET("/registrations/:id/confirmation.pdf", handlers.Registrations.GetPublicConfirmationPDF)
 
 	// Public payments
+	public.GET("/payments/providers", handlers.Payments.PaymentProviders)
+	public.POST("/payments/pesapal/checkout", RateLimit("public.pesapal.checkout", 5, time.Minute), handlers.Payments.PesaPalCheckout)
+	public.GET("/payments/pesapal/callback", RateLimit("public.pesapal.callback", 20, time.Minute), handlers.Payments.PesaPalNotification)
+	api.GET("/webhooks/pesapal", RateLimit("pesapal.ipn", 120, time.Minute), handlers.Payments.PesaPalNotification)
+	api.POST("/webhooks/pesapal", RateLimit("pesapal.ipn", 120, time.Minute), handlers.Payments.PesaPalNotification)
 	public.POST("/payments/stripe/checkout", RateLimit("public.payments.stripe", 5, time.Minute), handlers.Payments.StripeCheckout)
 	api.POST("/webhooks/stripe", handlers.Payments.StripeWebhook)
 	public.POST("/payments/mpesa/stk", RateLimit("public.payments.mpesa", 5, time.Minute), handlers.Payments.MpesaSTK)
@@ -69,7 +74,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 
 	// Admin
 	admin := api.Group("/admin")
-	admin.Use(RequireAuth(authManager))
+	admin.Use(RequireAuth(authManager, handlers.Auth.Service))
 
 	// Admin: CMS
 	admin.GET("/pages", RequirePermission("cms.page.read"), handlers.CMS.ListPages)
@@ -135,10 +140,13 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	admin.PUT("/registrations/:id", RequirePermission("registration.write"), handlers.Registrations.UpdateRegistration)
 	admin.POST("/registrations/:id/cancel", RequirePermission("registration.cancel"), handlers.Registrations.CancelRegistration)
 	admin.POST("/registrations/:id/resend-confirmation", RequirePermission("registration.read"), handlers.Registrations.ResendConfirmation)
-	admin.POST("/registrations/:id/resend-receipt", RequirePermission("payment.read"), handlers.Registrations.ResendReceipt)
+	admin.POST("/registrations/:id/resend-receipt", RequirePermission("payment.receipt.resend"), RateLimit("admin.receipt.resend", 5, time.Minute), handlers.Payments.ResendRegistrationReceipt)
 
 	// Admin: Payments + Finance
 	admin.GET("/payments", RequirePermission("payment.read"), handlers.Payments.ListPayments)
+	admin.POST("/payments/:id/verify", RequirePermission("payment.verify"), RateLimit("admin.pesapal.verify", 10, time.Minute), handlers.Payments.VerifyPesaPalAdmin)
+	admin.GET("/payments/:id", RequirePermission("payment.read"), handlers.Payments.GetPaymentDetail)
+	admin.POST("/payments/:id/resend-receipt", RequirePermission("payment.receipt.resend"), RateLimit("admin.receipt.resend", 5, time.Minute), handlers.Payments.ResendPaymentReceipt)
 	admin.POST("/payments/:id/refund", RequirePermission("payment.refund"), handlers.Payments.Refund)
 	admin.GET("/finance/dashboard", RequirePermission("finance.export"), handlers.Finance.Dashboard)
 	admin.GET("/finance/export", RequirePermission("finance.export"), handlers.Finance.Export)
@@ -149,6 +157,8 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	admin.POST("/reconciliation/resolve", RequirePermission("finance.reconcile.import"), handlers.Finance.ReconcileResolve)
 
 	// Admin: Bibs + Check-in
+	admin.GET("/race-day/events", RequireAnyPermission("checkin.access", "bib.assign.auto", "bib.assign.manual"), handlers.Bibs.ListRaceEvents)
+	admin.GET("/race-day/events/:id/entries", RequireAnyPermission("checkin.access", "bib.assign.auto", "bib.assign.manual"), handlers.Bibs.ListRaceEntries)
 	admin.POST("/events/:id/bibs/auto-assign", RequirePermission("bib.assign.auto"), handlers.Bibs.AutoAssign)
 	admin.POST("/events/:id/bibs/manual-assign", RequirePermission("bib.assign.manual"), handlers.Bibs.ManualAssign)
 	admin.POST("/events/:id/bibs/lock", RequirePermission("bib.assign.manual"), handlers.Bibs.LockBibs)
@@ -184,6 +194,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	admin.PUT("/products/:id", RequirePermission("shop.write"), handlers.Shop.UpdateProduct)
 	admin.DELETE("/products/:id", RequirePermission("shop.write"), handlers.Shop.DeleteProduct)
 	admin.GET("/orders", RequirePermission("shop.read"), handlers.Shop.ListOrders)
+	admin.POST("/orders/:id/collect", RequirePermission("shop.fulfill"), handlers.Shop.CollectOrder)
 
 	// Admin: Audit
 	admin.GET("/audit-logs", RequirePermission("audit.read"), handlers.Audit.List)
