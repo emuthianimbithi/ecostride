@@ -190,6 +190,56 @@ paths:
                   status: { type: string, enum: [pending_payment, confirmed] }
         "409": { description: Existing registration or stale waiver; no existing participant data returned }
         "400": { description: Invalid request or waiver acceptance missing }
+  /public/registrations/recover:
+    post:
+      summary: Request an email link to an existing registration
+      description: Returns the same generic 202 for matched, unmatched and cooldown requests. No entry identifiers or participant information are disclosed. Requires Resend/SMTP delivery; queued links expire after 15 minutes. Limited per IP and registration/email, with a 4 KiB body bound.
+      tags: [Public Registration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_slug, email]
+              properties:
+                event_slug: { type: string }
+                email: { type: string, format: email }
+      responses:
+        "202": { description: Generic acknowledgement; check email if a registration matches }
+        "400": { description: Invalid request }
+        "429": { description: Request rate limited }
+        "503": { description: Email recovery unavailable }
+  /public/registrations/recover/verify:
+    post:
+      summary: Verify a single-use registration recovery link
+      description: Atomic, single-use email verification. Returns a minimal owner summary and an action; does not create an entry or payment. Pending/settled attempts outrank failures. The user must explicitly choose to continue checkout. Private/no-store response; 4 KiB body bound.
+      tags: [Public Registration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 64, maxLength: 64 }
+      responses:
+        "200":
+          description: Verified registration summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registration_slug: { type: string, format: uuid }
+                  event_title: { type: string }
+                  athlete_name: { type: string }
+                  next_action: { type: string, enum: [retry_payment, view_payment, view_ticket, contact_support] }
+                  payment_id: { type: string }
+        "400": { description: Invalid, used or expired link }
+        "429": { description: Verification rate limited }
+        "503": { description: Verification unavailable }
   /public/registrations/{id}:
     get:
       summary: Get registration

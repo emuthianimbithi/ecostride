@@ -62,6 +62,17 @@ type RefreshToken struct {
 
 // CMS
 
+// RegistrationRecovery stores a hash of a short-lived, single-use email link.
+type RegistrationRecovery struct {
+	gorm.Model
+	Registration   Registration `gorm:"foreignKey:RegistrationID;constraint:OnDelete:CASCADE" json:"-"`
+	RegistrationID uint         `gorm:"index" json:"-"`
+	Email          string       `json:"-"`
+	TokenHash      string       `gorm:"uniqueIndex;not null" json:"-"`
+	ExpiresAt      time.Time    `json:"-"`
+	ConsumedAt     *time.Time   `json:"-"`
+}
+
 type Page struct {
 	gorm.Model
 	Slug           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();uniqueIndex" json:"slug"`

@@ -163,7 +163,7 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 		return
 	}
 	if existing != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use your confirmation link or contact support"})
+		c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use Continue your registration to email yourself a secure link"})
 		return
 	}
 
@@ -248,7 +248,7 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_reg_event_email_active_v2" {
-			c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use your confirmation link or contact support"})
+			c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use Continue your registration to email yourself a secure link"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create registration"})

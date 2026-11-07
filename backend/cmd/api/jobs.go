@@ -13,6 +13,7 @@ import (
 	"ecostride/backend/internal/registrations"
 	"ecostride/backend/internal/shop"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -22,6 +23,19 @@ type volunteerBroadcastPayload struct {
 }
 
 func registerJobHandlers(jobService *jobs.Service, receiptService *receipts.Service, db *gorm.DB, cfg config.Config) {
+	jobService.Register("registration.recovery", func(ctx context.Context, job models.Job) error {
+		payload, err := registrations.DecodeRecoveryPayload(job.Payload)
+		if err != nil {
+			return err
+		}
+		if err := registrations.SendRecoveryEmail(email.WithIdempotencyKey(ctx, "ecostride-job-"+job.Slug.String()), cfg, db, payload); err != nil {
+			return err
+		}
+		// Remove the bearer token from the durable queue after acceptance. Fence
+		// this update so an expired worker cannot mutate a newer attempt's job.
+		redacted, _ := json.Marshal(map[string]interface{}{"recovery_id": payload.RecoveryID})
+		return db.WithContext(ctx).Model(&models.Job{}).Where("id = ? AND attempts = ? AND status = 'processing'", job.ID, job.Attempts).Update("payload", datatypes.JSON(redacted)).Error
+	})
 	jobService.Register("order.expire", func(ctx context.Context, job models.Job) error {
 		var payload struct {
 			OrderID uint `json:"order_id"`

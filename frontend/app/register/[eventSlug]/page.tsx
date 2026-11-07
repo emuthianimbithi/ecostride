@@ -5,7 +5,8 @@ import { useRouter, useParams } from "next/navigation"
 import { z } from "zod"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { apiGet, apiPost } from "../../../lib/api-client"
+import { RegistrationRecoveryRequest } from "../../../components/registration-recovery-request"
+import { apiGet, apiPost, isApiError } from "../../../lib/api-client"
 import { formatDate, registrationWindowStatus } from "../../../lib/format"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
@@ -182,6 +183,7 @@ export default function Page() {
     const [errorSummary, setErrorSummary] = useState<string[]>([])
     const [draftHydrated, setDraftHydrated] = useState(false)
     const creatingRef = useRef(false)
+    const [showRecovery, setShowRecovery] = useState(false)
 
     const form = useForm<RegistrationForm>({
         resolver: zodResolver(registrationSchema),
@@ -419,6 +421,7 @@ export default function Page() {
         if (creatingRef.current) return
         creatingRef.current = true
 
+        let registrationSaved = false
         try {
             const currency = values.currency ?? "KES"
 
@@ -462,6 +465,7 @@ export default function Page() {
                 extras: extrasPayload
             })
 
+            registrationSaved = true
             const regSlug = String(registration?.slug ?? "")
             if (!regSlug) throw new Error("Registration response missing slug")
 
@@ -503,6 +507,7 @@ export default function Page() {
             if (payment.checkout_url) router.push(`/payment/${payment.payment_id}/checkout`)
             else router.push(`/payment/${payment.payment_id}`)
         } catch (err) {
+            if (!registrationSaved && isApiError(err) && err.status === 409 && err.message.toLowerCase().includes("registration already exists")) setShowRecovery(true)
             toastApiError(toast, err)
             setStatus(null)
             setError(err instanceof Error ? err.message : "Registration failed")
@@ -543,6 +548,7 @@ export default function Page() {
                     </p>
                 </div>
 
+                <RegistrationRecoveryRequest eventSlug={eventSlug} initialEmail={form.watch("email")} forceOpen={showRecovery}/>
                 <div className="space-y-2">
                     <Stepper
                         steps={steps.map((label) => ({ id: label.toLowerCase(), label }))}

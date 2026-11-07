@@ -59,3 +59,18 @@ test("disabled PesaPal prevents creating an unpaid registration with a legacy fa
   await expect(page).toHaveURL(/register\/malindi/)
   expect(registrations).toBe(0)
 })
+
+test("duplicate signup offers secure email recovery without exposing the existing entry",async({page})=>{
+ await mockEventData(page)
+ await page.route("**/api/v1/public/registrations",route=>route.fulfill({status:409,json:{error:{code:"CONFLICT",message:"registration already exists; use Continue your registration to email yourself a secure link"}}}))
+ let emails=0
+ await page.route("**/api/v1/public/registrations/recover",route=>{emails++;expect(route.request().postDataJSON()).toEqual({event_slug:"malindi",email:"jane@example.com"});return route.fulfill({status:202,json:{message:"If an eligible registration matches, a secure link will be sent to that email."}})})
+ await page.goto("/register/malindi")
+ await completeRegistrationSteps(page)
+ await page.getByRole("button",{name:"Submit registration"}).click()
+ await expect(page.getByRole("button",{name:"Email me a secure link"})).toBeVisible()
+ await expect(page.getByLabel("Registration email")).toHaveValue("jane@example.com")
+ await page.getByRole("button",{name:"Email me a secure link"}).click()
+ await expect(page.getByRole("status")).toBeVisible()
+ expect(emails).toBe(1)
+})

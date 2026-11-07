@@ -41,6 +41,8 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 	public.GET("/events/:slug/form-fields", handlers.Events.ListPublicFormFields)
 
 	// Public registration
+	public.POST("/registrations/recover", RateLimit("public.registration.recover", 3, time.Minute), handlers.Registrations.RequestRecovery)
+	public.POST("/registrations/recover/verify", RateLimit("public.registration.recover.verify", 10, time.Minute), handlers.Registrations.VerifyRecovery)
 	public.POST("/registrations", RateLimit("public.registration", 10, time.Minute), handlers.Registrations.CreatePublicRegistration)
 	public.GET("/registrations/:id", handlers.Registrations.GetPublicRegistration)
 	public.GET("/registrations/:id/confirmation.pdf", handlers.Registrations.GetPublicConfirmationPDF)
