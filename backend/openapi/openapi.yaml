@@ -213,7 +213,7 @@ paths:
   /public/registrations/recover/verify:
     post:
       summary: Verify a single-use registration recovery link
-      description: Atomic, single-use email verification. Returns a minimal owner summary and an action; does not create an entry or payment. Pending/settled attempts outrank failures. The user must explicitly choose to continue checkout. Private/no-store response; 4 KiB body bound.
+      description: Atomic email verification. Returns a minimal owner summary and an action; does not create an entry or payment. If an unpaid entry's category was retired, returns current event categories and keeps the link usable until the customer explicitly selects one. Pending/settled attempts outrank failures. Private/no-store response; 4 KiB body bound.
       tags: [Public Registration]
       requestBody:
         required: true
@@ -224,6 +224,7 @@ paths:
               required: [token]
               properties:
                 token: { type: string, minLength: 64, maxLength: 64 }
+                category_slug: { type: string, format: uuid, description: Optional replacement category for an unpaid entry whose prior category is unavailable }
       responses:
         "200":
           description: Verified registration summary
@@ -235,9 +236,20 @@ paths:
                   registration_slug: { type: string, format: uuid }
                   event_title: { type: string }
                   athlete_name: { type: string }
-                  next_action: { type: string, enum: [retry_payment, view_payment, view_ticket, contact_support] }
+                  next_action: { type: string, enum: [select_category, retry_payment, view_payment, view_ticket, contact_support] }
                   payment_id: { type: string }
-        "400": { description: Invalid, used or expired link }
+                  message: { type: string }
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slug: { type: string, format: uuid }
+                        name: { type: string }
+                        price_kes_minor: { type: integer }
+        "400": { description: Invalid, used, expired link or changed registration email }
+        "409": { description: Selected category is no longer available }
+        "410": { description: Registration or event is unavailable }
         "429": { description: Verification rate limited }
         "503": { description: Verification unavailable }
   /public/registrations/{id}:

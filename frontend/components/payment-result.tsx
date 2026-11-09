@@ -20,6 +20,7 @@ type Payment = {
   description?: string
   checkout_url?: string
   receipt_url?: string
+  requires_review?: boolean
   registration_slug?: string | null
   order_slug?: string | null
 }
@@ -76,8 +77,8 @@ export function PaymentResult({ checkout = false }: { checkout?: boolean }) {
   return <main className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 md:py-14">
     <header className="space-y-3">
       <EcoStrideLogo />
-      <h1 className="font-display text-3xl text-forest sm:text-4xl">{success ? "Thank you. Your payment is confirmed." : failed ? "Your payment was not completed." : reversed ? "Payment returned" : checkout ? "Complete your payment" : "Payment status"}</h1>
-      <p className="text-sm text-muted-foreground">{payment?.payer_name ? `${payment.payer_name}, ` : ""}{success ? "your receipt is available below." : failed ? "This attempt failed. Your purchase has not been marked paid." : reversed ? "This payment no longer provides a paid race entry or collection entitlement." : "Keep this page open. We’ll confirm the result automatically."}</p>
+      <h1 className="font-display text-3xl text-forest sm:text-4xl">{success && payment?.requires_review ? "Payment received. Your entry needs review." : success ? "Thank you. Your payment is confirmed." : failed ? "Your payment was not completed." : reversed ? "Payment returned" : checkout ? "Complete your payment" : "Payment status"}</h1>
+      <p className="text-sm text-muted-foreground">{payment?.payer_name ? `${payment.payer_name}, ` : ""}{success && payment?.requires_review ? "please contact the team before paying again or collecting your race entry/order." : success ? "your receipt is available below." : failed ? "This attempt failed. Your purchase has not been marked paid." : reversed ? "This payment no longer provides a paid race entry or collection entitlement." : "Keep this page open. We’ll confirm the result automatically."}</p>
     </header>
 
     {error && <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">{error} If you were charged, don’t pay again while we check.</p>}
@@ -107,7 +108,8 @@ export function PaymentResult({ checkout = false }: { checkout?: boolean }) {
 
       <div className="flex flex-wrap gap-3">
         {(success || status === "refunded") && payment.receipt_url && <a className={primary} href={payment.receipt_url}>Download receipt</a>}
-        {success && payment.registration_slug && <a className={secondary} href={`/confirm/${payment.registration_slug}`}>View race confirmation</a>}
+        {success && !payment.requires_review && payment.registration_slug && <a className={secondary} href={`/confirm/${payment.registration_slug}`}>View race confirmation</a>}
+        {payment.requires_review && <a className={secondary} href="/contact">Contact the team</a>}
         {payment.order_slug && <a className={secondary} href={`/orders/${payment.order_slug}`}>View order</a>}
         <a className={secondary} href="/events">Browse events</a>
         <a className={secondary} href="/shop">Visit shop</a>

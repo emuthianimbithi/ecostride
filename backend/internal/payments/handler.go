@@ -468,6 +468,8 @@ func (h *Handler) PaymentStatus(c *gin.Context) {
 	}
 
 	checkoutURL, receiptURL := "", ""
+	var publicMetadata map[string]interface{}
+	_ = json.Unmarshal(payment.Metadata, &publicMetadata)
 	if payment.Provider == "PESAPAL" && payment.Status == "pending" {
 		if candidate := extractMetadataString(payment.Metadata, "checkout_url"); validPesaPalRedirect(candidate) {
 			checkoutURL = candidate
@@ -486,6 +488,7 @@ func (h *Handler) PaymentStatus(c *gin.Context) {
 		"description":       description,
 		"checkout_url":      checkoutURL,
 		"receipt_url":       receiptURL,
+		"requires_review":   publicMetadata["requires_review"] == true,
 		"status":            CanonicalizePaymentStatus(payment.Status),
 		"provider":          strings.ToUpper(payment.Provider),
 		"currency":          strings.ToUpper(payment.Currency),

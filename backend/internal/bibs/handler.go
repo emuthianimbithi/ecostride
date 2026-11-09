@@ -70,7 +70,7 @@ func (h *Handler) AutoAssign(c *gin.Context) {
 			return err
 		}
 		var categories []models.EventCategory
-		if err := tx.Where("event_id = ?", event.ID).Find(&categories).Error; err != nil {
+		if err := tx.Unscoped().Where("event_id = ?", event.ID).Find(&categories).Error; err != nil {
 			return err
 		}
 		categoryMap := make(map[uint]*models.EventCategory)
@@ -146,7 +146,7 @@ func (h *Handler) AutoAssign(c *gin.Context) {
 			occupied[*next] = true
 			nextValue := *next + 1
 			category.BibNext = &nextValue
-			if err := tx.Model(&models.EventCategory{}).
+			if err := tx.Unscoped().Model(&models.EventCategory{}).
 				Where("id = ?", category.ID).
 				Update("bib_next", nextValue).Error; err != nil {
 				return err
@@ -207,7 +207,7 @@ func (h *Handler) ManualAssign(c *gin.Context) {
 			return errBibConflict
 		}
 		var category models.EventCategory
-		if err := tx.Where("id = ? AND event_id = ?", *registration.CategoryID, event.ID).First(&category).Error; err != nil {
+		if err := tx.Unscoped().Where("id = ? AND event_id = ?", *registration.CategoryID, event.ID).First(&category).Error; err != nil {
 			return err
 		}
 		if category.BibRangeStart == nil || category.BibRangeEnd == nil || req.BibNumber < *category.BibRangeStart || req.BibNumber > *category.BibRangeEnd {
@@ -265,7 +265,7 @@ func eligibleForRace(tx *gorm.DB, registration models.Registration) (bool, error
 		return true, nil
 	}
 	var category models.EventCategory
-	if err := tx.Where("id = ? AND event_id = ?", *registration.CategoryID, registration.EventID).First(&category).Error; err != nil {
+	if err := tx.Unscoped().Where("id = ? AND event_id = ?", *registration.CategoryID, registration.EventID).First(&category).Error; err != nil {
 		return false, err
 	}
 	paid := category.PriceKESMinor != 0 || (category.PriceUSDMinor != nil && *category.PriceUSDMinor != 0) || (category.PriceEURMinor != nil && *category.PriceEURMinor != 0)

@@ -18,6 +18,26 @@ test("email verification is explicit, then a failed payment can be retried on th
  expect(checkouts).toBe(1);expect(signups).toBe(0)
 })
 
+test("deleted category can be replaced before continuing the saved entry",async({page})=>{
+ const token="c".repeat(64),category="11111111-1111-4111-8111-111111111111"
+ let calls=0
+ await page.route("**/api/v1/public/registrations/recover/verify",async route=>{
+  const body=route.request().postDataJSON();calls++
+  if(calls===1){expect(body).toEqual({token});return route.fulfill({json:{registration_slug:"entry-existing",event_title:"Estuary Marathon",athlete_name:"Jane Runner",next_action:"select_category",message:"Choose a current category",categories:[{slug:category,name:"10 km",price_kes_minor:250000}]}})}
+  expect(body).toEqual({token,category_slug:category})
+  return route.fulfill({json:{registration_slug:"entry-existing",event_title:"Estuary Marathon",athlete_name:"Jane Runner",next_action:"retry_payment"}})
+ })
+ await page.goto("/registration-recovery#token="+token)
+ await page.getByRole("button",{name:"Verify and continue"}).click()
+ await expect(page.getByText("Choose a current category")).toBeVisible()
+ await expect(page.getByRole("option",{name:/10 km/})).toHaveCount(1)
+ expect(calls).toBe(1)
+ await page.getByLabel("Current race category").selectOption(category)
+ await page.getByRole("button",{name:"Confirm category"}).click()
+ await expect(page.getByRole("button",{name:"Continue payment"})).toBeVisible()
+ expect(calls).toBe(2)
+})
+
 for(const action of ["view_payment","view_ticket"]){
  test(`verified ${action} does not start another payment`,async({page})=>{
   let checkouts=0

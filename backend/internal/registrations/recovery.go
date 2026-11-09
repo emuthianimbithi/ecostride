@@ -6,6 +6,8 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"ecostride/backend/internal/audit"
+	"ecostride/backend/internal/common/apierrors"
 	"ecostride/backend/internal/common/config"
 	"ecostride/backend/internal/common/email"
 	"ecostride/backend/internal/common/models"
@@ -16,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"net/http"
@@ -172,21 +175,28 @@ func SendRecoveryEmail(ctx context.Context, cfg config.Config, db *gorm.DB, payl
 	return email.SendRichContext(ctx, cfg, record.Email, "Continue your EcoStride registration", text, html)
 }
 
+type recoveryCategory struct {
+	Slug          uuid.UUID `json:"slug"`
+	Name          string    `json:"name"`
+	PriceKESMinor int       `json:"price_kes_minor"`
+}
+
 func (h *Handler) VerifyRecovery(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
 	c.Header("Cache-Control", "private, no-store")
 	var req struct {
-		Token string `json:"token"`
+		Token        string `json:"token"`
+		CategorySlug string `json:"category_slug"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Token) != 64 {
-		c.JSON(400, gin.H{"error": "invalid or expired link; request a new email"})
+		apierrors.AbortWithError(c, 400, "RECOVERY_LINK_INVALID", "This link is incomplete. Request a new recovery email.", nil)
 		return
 	}
 	if _, err := hex.DecodeString(req.Token); err != nil {
-		c.JSON(400, gin.H{"error": "invalid or expired link; request a new email"})
+		apierrors.AbortWithError(c, 400, "RECOVERY_LINK_INVALID", "This link is invalid. Request a new recovery email.", nil)
 		return
 	}
-	invalid := errors.New("invalid recovery")
+	invalid, expired, used, unavailable, emailChanged, categoryConflict := errors.New("invalid"), errors.New("expired"), errors.New("used"), errors.New("entry unavailable"), errors.New("email changed"), errors.New("category conflict")
 	var response gin.H
 	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
 		var record models.RegistrationRecovery
@@ -196,46 +206,159 @@ func (h *Handler) VerifyRecovery(c *gin.Context) {
 			}
 			return err
 		}
-		if record.ConsumedAt != nil || time.Now().After(record.ExpiresAt) {
-			return invalid
+		if time.Now().After(record.ExpiresAt) {
+			return expired
 		}
-		ticket, err := tickets.Load(c.Request.Context(), tx, record.RegistrationID)
-		if err != nil {
-			return invalid
+		if record.ConsumedAt != nil {
+			return used
 		}
-		reg := ticket.Registration
+		// Lock existing attempts before the registration, matching settlement's lock
+		// order. Re-read attempts after the registration lock to include new claims.
+		var attempts []models.Payment
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("registration_id = ?", record.RegistrationID).Order("id").Find(&attempts).Error; err != nil {
+			return err
+		}
+		var reg models.Registration
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&reg, record.RegistrationID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return unavailable
+			}
+			return err
+		}
 		if strings.ToLower(strings.TrimSpace(reg.Email)) != record.Email {
-			return invalid
+			return emailChanged
 		}
-		action := "contact_support"
-		paymentID := ""
+		var event models.Event
+		if err := tx.First(&event, reg.EventID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return unavailable
+			}
+			return err
+		}
 		var payment models.Payment
-		// A pending/settled attempt outranks failed attempts, even if a failed row is newer.
 		if err := tx.Where("registration_id = ?", reg.ID).Order("CASE WHEN status IN ('success','paid','refunded','chargeback') THEN 0 WHEN status IN ('pending','processing') THEN 1 ELSE 2 END, created_at DESC, id DESC").Limit(1).Find(&payment).Error; err != nil {
 			return err
 		}
-		if ticket.Eligible {
-			action = "view_ticket"
+		base := gin.H{"registration_slug": reg.Slug, "event_title": event.Title, "athlete_name": reg.AthleteName, "next_action": "contact_support", "payment_id": ""}
+		if payment.ID != 0 {
+			base["payment_id"] = payment.Slug.String()
+		}
+		var category models.EventCategory
+		if reg.CategoryID != nil {
+			if err := tx.Where("id = ? AND event_id = ?", *reg.CategoryID, event.ID).Limit(1).Find(&category).Error; err != nil {
+				return err
+			}
+		}
+		var categoryCount int64
+		if err := tx.Model(&models.EventCategory{}).Where("event_id = ?", event.ID).Count(&categoryCount).Error; err != nil {
+			return err
+		}
+		missingCategory := (reg.CategoryID != nil && category.ID == 0) || (reg.CategoryID == nil && categoryCount > 0)
+		unpaid := (reg.Status == "created" || reg.Status == "pending_payment") && (payment.ID == 0 || payment.Status == "failed")
+		var assigned int64
+		if err := tx.Model(&models.BibAssignment{}).Where("registration_id = ?", reg.ID).Count(&assigned).Error; err != nil {
+			return err
+		}
+		if missingCategory && unpaid && assigned == 0 {
+			var choices []recoveryCategory
+			if err := tx.Model(&models.EventCategory{}).Select("slug, name, price_kes_minor").Where("event_id = ? AND (price_kes_minor > 0 OR (price_kes_minor = 0 AND COALESCE(price_usd_minor,0) = 0 AND COALESCE(price_eur_minor,0) = 0))", event.ID).Order("created_at, id").Find(&choices).Error; err != nil {
+				return err
+			}
+			if req.CategorySlug == "" && len(choices) > 0 {
+				base["next_action"] = "select_category"
+				base["categories"] = choices
+				base["message"] = "Your previous race category is no longer available. Choose a current category to continue your saved registration."
+				response = base
+				return nil // The verified link stays usable until selection.
+			}
+			if req.CategorySlug != "" {
+				slug, err := uuid.Parse(req.CategorySlug)
+				if err != nil {
+					return categoryConflict
+				}
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("slug = ? AND event_id = ?", slug, event.ID).First(&category).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						return categoryConflict
+					}
+					return err
+				}
+				if category.PriceKESMinor < 0 || (category.PriceKESMinor == 0 && ((category.PriceUSDMinor != nil && *category.PriceUSDMinor > 0) || (category.PriceEURMinor != nil && *category.PriceEURMinor > 0))) {
+					return categoryConflict
+				}
+				if category.Capacity != nil && *category.Capacity > 0 {
+					var count int64
+					if err := tx.Model(&models.Registration{}).Where("category_id = ? AND id <> ? AND status IN ?", category.ID, reg.ID, []string{"created", "pending_payment", "paid", "confirmed"}).Count(&count).Error; err != nil {
+						return err
+					}
+					if count >= int64(*category.Capacity) {
+						return categoryConflict
+					}
+				}
+				previous := reg.CategoryID
+				// A later correction of an old failed attempt must be reviewed, rather than
+				// paying for a different category behind the customer's back.
+				if err := tx.Model(&models.Payment{}).Where("registration_id = ? AND status = 'failed'", reg.ID).Update("metadata", gorm.Expr(`(CASE WHEN jsonb_typeof(metadata) = 'object' THEN metadata ELSE '{}'::jsonb END) || '{"category_superseded":true}'::jsonb`)).Error; err != nil {
+					return err
+				}
+				reg.CategoryID = &category.ID
+				updates := map[string]interface{}{"category_id": category.ID}
+				if category.PriceKESMinor == 0 {
+					reg.Status = "confirmed"
+					updates["status"] = "confirmed"
+				}
+				if err := tx.Model(&reg).Updates(updates).Error; err != nil {
+					return err
+				}
+				auditValue, _ := json.Marshal(gin.H{"previous_category_id": previous, "category_slug": category.Slug, "price_kes_minor": category.PriceKESMinor})
+				if err := audit.NewService(tx).Log(c.Request.Context(), audit.Entry{ActionKey: "registration.category.recover", EntityType: "registration", EntityID: reg.Slug.String(), NewJSON: auditValue, IP: c.ClientIP(), UserAgent: c.GetHeader("User-Agent")}); err != nil {
+					return err
+				}
+				if reg.Status == "confirmed" {
+					if _, err := jobs.NewService(tx).Enqueue(c.Request.Context(), "registration.confirmation", registrationJobPayload{RegistrationID: reg.ID}, time.Now()); err != nil {
+						return err
+					}
+				}
+				missingCategory = false
+			}
+		} else if req.CategorySlug != "" {
+			return categoryConflict
+		}
+		ticket, err := tickets.Load(c.Request.Context(), tx, reg.ID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil && ticket.Eligible {
+			base["next_action"] = "view_ticket"
 		} else if reg.Status == "created" || reg.Status == "pending_payment" {
-			if payment.ID == 0 || payment.Status == "failed" {
-				action = "retry_payment"
-			} else {
-				action = "view_payment"
-				paymentID = payment.Slug.String()
+			if payment.ID != 0 && payment.Status != "failed" {
+				base["next_action"] = "view_payment"
+			} else if !missingCategory && category.ID != 0 && category.PriceKESMinor > 0 {
+				base["next_action"] = "retry_payment"
 			}
 		}
 		if err := tx.Model(&record).Update("consumed_at", time.Now()).Error; err != nil {
 			return err
 		}
-		response = gin.H{"registration_slug": reg.Slug, "event_title": ticket.Event.Title, "athlete_name": reg.AthleteName, "next_action": action, "payment_id": paymentID}
+		response = base
 		return nil
 	})
 	if err != nil {
-		code := 503
-		if errors.Is(err, invalid) {
-			code = 400
+		code, status, message := "RECOVERY_UNAVAILABLE", 503, "We couldn't check your registration right now. Please try again."
+		switch {
+		case errors.Is(err, invalid):
+			code, status, message = "RECOVERY_LINK_INVALID", 400, "This link was not recognized. Request a new recovery email."
+		case errors.Is(err, expired):
+			code, status, message = "RECOVERY_LINK_EXPIRED", 400, "This recovery link has expired. Request a new email."
+		case errors.Is(err, used):
+			code, status, message = "RECOVERY_LINK_USED", 400, "This link has already been used. Request a new email to continue."
+		case errors.Is(err, unavailable):
+			code, status, message = "RECOVERY_ENTRY_UNAVAILABLE", 410, "This registration or event is no longer available. Contact the team for help."
+		case errors.Is(err, emailChanged):
+			code, status, message = "RECOVERY_EMAIL_CHANGED", 400, "The registration email has changed. Request a new link using the current email."
+		case errors.Is(err, categoryConflict):
+			code, status, message = "RECOVERY_CATEGORY_UNAVAILABLE", 409, "That category is unavailable or cannot be changed on this entry. Choose another option or contact the team."
 		}
-		c.JSON(code, gin.H{"error": "invalid, used or expired link; request a new email"})
+		apierrors.AbortWithError(c, status, code, message, nil)
 		return
 	}
 	c.JSON(200, response)

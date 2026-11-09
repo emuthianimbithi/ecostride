@@ -2,10 +2,12 @@ package events
 
 import (
 	"context"
+	"errors"
 
 	"ecostride/backend/internal/common/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Service handles event operations.
@@ -83,8 +85,22 @@ func (s *Service) UpdateCategory(ctx context.Context, category models.EventCateg
 	return category, nil
 }
 
+var ErrCategoryInUse = errors.New("category is linked to registrations")
+
 func (s *Service) DeleteCategory(ctx context.Context, category models.EventCategory) error {
-	return s.DB.WithContext(ctx).Delete(&category).Error
+	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&category, category.ID).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Unscoped().Model(&models.Registration{}).Where("category_id = ?", category.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrCategoryInUse
+		}
+		return tx.Delete(&category).Error
+	})
 }
 
 func (s *Service) ListFormFields(ctx context.Context, eventID uint) ([]models.EventFormField, error) {

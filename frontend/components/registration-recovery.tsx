@@ -3,15 +3,16 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { apiPost } from "../lib/api-client"
 
-type Recovery={registration_slug:string;athlete_name:string;event_title:string;next_action:"retry_payment"|"view_payment"|"view_ticket"|"contact_support";payment_id?:string}
+type Recovery={registration_slug:string;athlete_name:string;event_title:string;next_action:"retry_payment"|"view_payment"|"view_ticket"|"contact_support"|"select_category";payment_id?:string;message?:string;categories?:{slug:string;name:string;price_kes_minor:number}[]}
 export function RegistrationRecovery(){
  const router=useRouter()
  const [token,setToken]=useState(""),[entry,setEntry]=useState<Recovery|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("")
  const sending=useRef(false),paymentKey=useRef("")
+ const [category,setCategory]=useState("")
  useEffect(()=>{const read=()=>{setToken(new URLSearchParams(window.location.hash.slice(1)).get("token")??"");setEntry(null);setError("");paymentKey.current=""};read();window.addEventListener("hashchange",read);return()=>window.removeEventListener("hashchange",read)},[])
- const verify=async()=>{
+ const verify=async(categorySlug?:string)=>{
   if(sending.current||!token)return;sending.current=true;setBusy(true);setError("")
-  try{const data=await apiPost<Recovery>("/public/registrations/recover/verify",{token});setEntry(data);setToken("");window.history.replaceState(null,"","/registration-recovery")}
+  try{const data=await apiPost<Recovery>("/public/registrations/recover/verify",{token,...(categorySlug?{category_slug:categorySlug}:{})});setEntry(data);if(data.next_action!=="select_category"){setToken("");window.history.replaceState(window.history.state,"","/registration-recovery")}}
   catch(err){setError(err instanceof Error?err.message:"Unable to verify your link. Please request a new one.")}
   finally{sending.current=false;setBusy(false)}
  }
@@ -28,14 +29,20 @@ export function RegistrationRecovery(){
   {error&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
   {!entry&&<>
    <p className="text-muted-foreground">Verify your email link to view your existing entry. This won’t charge you or register you twice.</p>
-   {token?<button className={button} disabled={busy} onClick={verify}>{busy?"Verifying…":"Verify and continue"}</button>:<p className="text-sm">Open the secure link from your email. Used or expired links require a new email from the event registration page.</p>}
+   {token?<button className={button} disabled={busy} onClick={()=>verify()}>{busy?"Verifying…":"Verify and continue"}</button>:<p className="text-sm">Open the secure link from your email. Used or expired links require a new email from the event registration page.</p>}
   </>}
   {entry&&<section className="space-y-4 rounded-2xl border border-sand-200 bg-white p-6">
    <h2 className="text-xl font-semibold text-forest">{entry.event_title}</h2><p>{entry.athlete_name}</p>
+   {entry.next_action==="select_category"&&<>
+    <p>{entry.message??"Your previous category is unavailable. Choose a current category to continue."}</p>
+    <label className="block text-sm font-semibold">Current race category<select aria-label="Current race category" value={category} onChange={e=>setCategory(e.target.value)} className="mt-2 w-full rounded-xl border border-sand-300 px-3 py-3"><option value="">Choose a category</option>{entry.categories?.map(item=><option key={item.slug} value={item.slug}>{item.name} — {item.price_kes_minor===0?"Free":`KES ${(item.price_kes_minor/100).toFixed(2)}`}</option>)}</select></label>
+    <p className="text-sm text-muted-foreground">Selecting a category updates your saved entry. Payment only starts when you choose Continue payment afterward.</p>
+    <button className={button} disabled={busy||!category} onClick={()=>verify(category)}>{busy?"Updating entry…":"Confirm category"}</button>
+   </>}
    {entry.next_action==="view_ticket"&&<><p>Your entry is already confirmed.</p><a className={button} href={`/confirm/${entry.registration_slug}`}>View your race ticket</a></>}
    {entry.next_action==="view_payment"&&entry.payment_id&&<><p>Your payment is still being checked or has a recorded outcome. Review it before paying again.</p><a className={button} href={`/payment/${entry.payment_id}/checkout`}>View existing payment</a></>}
    {entry.next_action==="retry_payment"&&<><p>Your registration is saved. Continue with PesaPal to complete payment; we won’t create another entry.</p><button className={button} disabled={busy} onClick={continuePayment}>{busy?"Opening checkout…":"Continue payment"}</button></>}
-   {entry.next_action==="contact_support"&&<><p>This entry needs a review before another payment. Please contact the team.</p><a className={button} href="/contact">Contact support</a></>}
+   {entry.next_action==="contact_support"&&<><p>This entry needs a review before another payment. Please contact the team.</p><a className={button} href="/contact">Contact support</a>{entry.payment_id&&<a className="block font-semibold text-forest underline" href={`/payment/${entry.payment_id}`}>View recorded payment</a>}</>}
   </section>}
   <a href="/events" className="inline-block font-semibold text-forest underline">Browse events</a>
  </main>

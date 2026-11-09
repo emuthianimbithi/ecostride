@@ -297,7 +297,11 @@ func (s *Service) MarkPaymentSuccess(ctx context.Context, payment models.Payment
 				return err
 			}
 			email = registration.Email
-			if registration.Status == "cancelled" || registration.Status == "refunded" {
+			var metadata map[string]interface{}
+			_ = json.Unmarshal(payment.Metadata, &metadata)
+			if metadata["category_superseded"] == true {
+				payment.Metadata = mergeMetadata(payment.Metadata, map[string]interface{}{"requires_review": true, "review_reason": "payment_received_for_replaced_category"})
+			} else if registration.Status == "cancelled" || registration.Status == "refunded" {
 				payment.Metadata = mergeMetadata(payment.Metadata, map[string]interface{}{"requires_review": true, "review_reason": "payment_received_for_ineligible_registration"})
 			} else if registration.Status != "confirmed" {
 				if err := tx.Model(&registration).Update("status", "confirmed").Error; err != nil {

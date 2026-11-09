@@ -44,7 +44,7 @@ func (h *Handler) ListRaceEntries(c *gin.Context) {
 		return
 	}
 	query := h.DB.WithContext(c.Request.Context()).Table("registrations AS r").
-		Joins("LEFT JOIN event_categories AS cat ON cat.id = r.category_id AND cat.deleted_at IS NULL").
+		Joins("LEFT JOIN event_categories AS cat ON cat.id = r.category_id AND cat.event_id = r.event_id").
 		Joins("LEFT JOIN bib_assignments AS b ON b.registration_id = r.id AND b.event_id = r.event_id AND b.deleted_at IS NULL").
 		Joins("LEFT JOIN checkins AS ci ON ci.registration_id = r.id AND ci.deleted_at IS NULL").
 		Where("r.event_id = ? AND r.deleted_at IS NULL", event.ID)

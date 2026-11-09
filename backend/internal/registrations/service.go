@@ -2,10 +2,12 @@ package registrations
 
 import (
 	"context"
+	"errors"
 
 	"ecostride/backend/internal/common/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Service handles registrations.
@@ -17,8 +19,19 @@ func NewService(db *gorm.DB) *Service {
 	return &Service{DB: db}
 }
 
+var ErrCategoryUnavailable = errors.New("category is no longer available")
+
 func (s *Service) CreateRegistration(ctx context.Context, registration models.Registration, consent models.ConsentRecord) (models.Registration, error) {
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if registration.CategoryID != nil {
+			var category models.EventCategory
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND event_id = ?", *registration.CategoryID, registration.EventID).First(&category).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrCategoryUnavailable
+				}
+				return err
+			}
+		}
 		if err := tx.Create(&registration).Error; err != nil {
 			return err
 		}

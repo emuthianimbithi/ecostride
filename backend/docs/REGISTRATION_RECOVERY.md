@@ -13,6 +13,8 @@ Verification returns a minimal summary and one of these actions:
 | Unpaid entry without an attempt, or with only failed attempts | Customer chooses Continue payment, creating a new PesaPal attempt for the same registration |
 | Cancelled/ineligible or otherwise unsupported entry | Contact support |
 
+If an unpaid entry references a deleted category, verification offers active categories for the same event with their current KES prices. The customer must choose one to update the saved entry; the recovery link is not consumed until that choice is submitted, and payment still requires a separate explicit action. Categories referenced by any registration can no longer be deleted through admin. Retired categories remain available for historical tickets and race-day entries. A delayed success from an old failed attempt after the customer changes category is flagged for staff review and does not confirm the new category.
+
 Settled and pending attempts outrank later failed attempts during lookup. The normal checkout target locks/idempotency rules still govern every payment request, including two recovered browsers acting at once. A network retry in the recovery page reuses its checkout key. Verification itself creates neither a registration nor a payment. A person whose original signup never saved can still register normally with the same email.
 
 ## Protections and delivery
@@ -25,7 +27,7 @@ Recovery requires configured Resend or SMTP and JWT_SECRET; console mode cannot 
 
 ## Deployment and verification
 
-Run the existing migration command from the newly built image before deploying the frontend/API; it creates registration_recoveries. No new secrets are required beyond the existing JWT_SECRET and configured email delivery. Deploy both frontend and API, then use your own registered email to verify actual delivery and resume behavior. Tests do not send real recovery emails or charge a merchant account.
+No new migration is needed for the deleted-category fix. Rebuild and deploy both frontend and API, then request a fresh recovery email and verify the replacement-category and resume behavior. No new secrets are required beyond the existing JWT_SECRET and configured email delivery. Tests do not send real recovery emails or charge a merchant account.
 
 Backend tests cover generic lookup privacy, normalized email, cooldown, encrypted queue payload/hash storage, forged/expired/used tokens, concurrent single-use consumption, failed/pending/paid/review routing and no payment/registration creation during verification. Six Playwright registration/recovery scenarios passed against mocked API replies; TypeScript checking passed. Browser tests ran on an isolated port so another local app could not be reused accidentally:
 

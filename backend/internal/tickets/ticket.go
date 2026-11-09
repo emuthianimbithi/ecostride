@@ -31,7 +31,8 @@ func Load(ctx context.Context, db *gorm.DB, id uint) (Ticket, error) {
 	result.Eligible = reg.Status == "confirmed" || reg.Status == "paid"
 	if reg.CategoryID != nil {
 		var category models.EventCategory
-		if err := db.WithContext(ctx).Where("id = ? AND event_id = ?", *reg.CategoryID, reg.EventID).First(&category).Error; err != nil {
+		// A retired category remains part of an existing entry's history.
+		if err := db.WithContext(ctx).Unscoped().Where("id = ? AND event_id = ?", *reg.CategoryID, reg.EventID).First(&category).Error; err != nil {
 			return result, err
 		}
 		result.Category = &category

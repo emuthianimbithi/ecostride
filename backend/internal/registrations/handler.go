@@ -246,6 +246,10 @@ func (h *Handler) CreatePublicRegistration(c *gin.Context) {
 
 	created, err := h.Service.CreateRegistration(c.Request.Context(), registration, consent)
 	if err != nil {
+		if errors.Is(err, ErrCategoryUnavailable) {
+			c.JSON(409, gin.H{"error": "This category is no longer available. Refresh the event and choose a current category."})
+			return
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_reg_event_email_active_v2" {
 			c.JSON(http.StatusConflict, gin.H{"error": "registration already exists; use Continue your registration to email yourself a secure link"})

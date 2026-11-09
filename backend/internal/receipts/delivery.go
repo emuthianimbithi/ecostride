@@ -5,6 +5,7 @@ import (
 	"ecostride/backend/internal/common/email"
 	"ecostride/backend/internal/common/models"
 	"ecostride/backend/internal/tickets"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,7 +29,9 @@ func (s *Service) buildEmail(ctx context.Context, receipt models.Receipt, paymen
 		if ticket.Category != nil {
 			data.Details = append(data.Details, email.Detail{Label: "Category", Value: ticket.Category.Name})
 		}
-		if ticket.Eligible && payment.Status == "success" {
+		var metadata map[string]interface{}
+		_ = json.Unmarshal(payment.Metadata, &metadata)
+		if ticket.Eligible && payment.Status == "success" && metadata["category_superseded"] != true {
 			message.Subject = "Your " + event.Title + " ticket & receipt"
 			data.Eyebrow = "RACE ENTRY CONFIRMED"
 			data.Title = event.Title

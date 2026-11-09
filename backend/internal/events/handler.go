@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -581,6 +582,10 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 }
 
 func (h *Handler) DeleteCategory(c *gin.Context) {
+	event, err := h.getEventBySlugParam(c)
+	if err != nil {
+		return
+	}
 	categorySlug, err := uuid.Parse(c.Param("categoryId"))
 	if err != nil {
 		apierrors.AbortWithError(c, http.StatusBadRequest, "", "invalid category id", nil)
@@ -588,12 +593,16 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	var category models.EventCategory
-	if err := h.Service.DB.WithContext(c.Request.Context()).Where("slug = ?", categorySlug).First(&category).Error; err != nil {
+	if err := h.Service.DB.WithContext(c.Request.Context()).Where("slug = ? AND event_id = ?", categorySlug, event.ID).First(&category).Error; err != nil {
 		apierrors.AbortWithError(c, http.StatusNotFound, "", "category not found", nil)
 		return
 	}
 
 	if err := h.Service.DeleteCategory(c.Request.Context(), category); err != nil {
+		if errors.Is(err, ErrCategoryInUse) {
+			apierrors.AbortWithError(c, 409, "CATEGORY_IN_USE", "This category is used by registrations and cannot be deleted. Edit it or contact the team to review existing entries.", nil)
+			return
+		}
 		apierrors.AbortWithError(c, http.StatusInternalServerError, "", "failed to delete category", nil)
 		return
 	}
