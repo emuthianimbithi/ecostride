@@ -11,6 +11,12 @@ function useRevealOnScroll<T extends HTMLElement>() {
     const node = ref.current
     if (!node) return
 
+    // Keep content visible on browsers without IntersectionObserver support.
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true)
+      return
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
@@ -18,7 +24,10 @@ function useRevealOnScroll<T extends HTMLElement>() {
           observer.disconnect()
         }
       },
-      { threshold: 0.18, rootMargin: "0px 0px -10% 0px" }
+      // A wrapper can be taller than the mobile viewport. Requiring 18% of it
+      // to intersect means the threshold may never fire, leaving all content
+      // hidden. Any intersection is enough to reveal the wrapper.
+      { threshold: 0, rootMargin: "0px" }
     )
 
     observer.observe(node)
