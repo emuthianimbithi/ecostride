@@ -184,37 +184,37 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-sand-200 bg-background py-16">
       <div className="mx-auto max-w-6xl space-y-10 px-4 sm:px-6 md:px-8">
-        {partners.length > 0 ? (
-          <section className="space-y-4 border-b border-sand-200 pb-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-tide-600">Partners</p>
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
-              {partners.map((partner) => (
-                <Link
-                  key={partner.slug}
-                  href={`/sponsors/${partner.url_slug}`}
-                  className="link-underline flex items-center gap-3 text-sm text-sand-700 transition hover:text-foreground"
-                >
-                  {partner.logo.url ? (
-                    <span className="flex h-10 w-10 items-center justify-center">
-                      <Image
-                        src={partner.logo.url}
-                        alt={partner.logo.alt || partner.name}
-                        width={36}
-                        height={36}
-                        className="h-8 w-8 object-contain"
-                      />
-                    </span>
-                  ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sand-100 text-xs font-semibold text-foreground">
-                      {partner.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                  <span className="font-medium">{partner.name}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        {/*{partners.length > 0 ? (*/}
+        {/*  <section className="space-y-4 border-b border-sand-200 pb-10">*/}
+        {/*    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-tide-600">Partners</p>*/}
+        {/*    <div className="flex flex-wrap items-center gap-x-8 gap-y-4">*/}
+        {/*      {partners.map((partner) => (*/}
+        {/*        <Link*/}
+        {/*          key={partner.slug}*/}
+        {/*          href={`/sponsors/${partner.url_slug}`}*/}
+        {/*          className="link-underline flex items-center gap-3 text-sm text-sand-700 transition hover:text-foreground"*/}
+        {/*        >*/}
+        {/*          {partner.logo.url ? (*/}
+        {/*            <span className="flex h-10 w-10 items-center justify-center">*/}
+        {/*              <Image*/}
+        {/*                src={partner.logo.url}*/}
+        {/*                alt={partner.logo.alt || partner.name}*/}
+        {/*                width={36}*/}
+        {/*                height={36}*/}
+        {/*                className="h-8 w-8 object-contain"*/}
+        {/*              />*/}
+        {/*            </span>*/}
+        {/*          ) : (*/}
+        {/*            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sand-100 text-xs font-semibold text-foreground">*/}
+        {/*              {partner.name.slice(0, 2).toUpperCase()}*/}
+        {/*            </span>*/}
+        {/*          )}*/}
+        {/*          <span className="font-medium">{partner.name}</span>*/}
+        {/*        </Link>*/}
+        {/*      ))}*/}
+        {/*    </div>*/}
+        {/*  </section>*/}
+        {/*) : null}*/}
 
         <div className="grid gap-8 md:grid-cols-3">
           <div className="space-y-4">
