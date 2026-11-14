@@ -523,7 +523,7 @@ function RegistrationsPageInner() {
 
           <button
             onClick={saveCurrentFiltersAsPreset}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-tide-500 hover:bg-tide-50"
             title="Save current filters"
           >
             <Settings2 className="h-4 w-4" />
@@ -533,7 +533,7 @@ function RegistrationsPageInner() {
           <div className="relative">
             <button
               onClick={() => setShowColumnMenu((prev) => !prev)}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-tide-500 hover:bg-tide-50"
             >
               <Eye className="h-4 w-4" />
               Columns
@@ -564,7 +564,7 @@ function RegistrationsPageInner() {
 
           <button
             onClick={() => handleExport("csv")}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-tide-500 hover:bg-tide-50"
             title="Export CSV"
           >
             <Download className="h-4 w-4" />
@@ -572,7 +572,7 @@ function RegistrationsPageInner() {
           </button>
           <button
             onClick={() => handleExport("xlsx")}
-            className="inline-flex items-center gap-2 rounded-full border border-forest/30 px-4 py-2 text-sm font-semibold text-forest"
+            className="inline-flex items-center gap-2 rounded-full border border-tide-600 bg-tide-50 px-4 py-2 text-sm font-semibold text-forest transition hover:bg-tide-100"
             title="Export XLSX"
           >
             <Download className="h-4 w-4" />
@@ -722,7 +722,7 @@ function RegistrationsPageInner() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleAction(`/admin/registrations/${item.slug}/resend-confirmation`, "Confirmation queued")}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-forest transition hover:bg-slate-50"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-forest transition hover:border-tide-500 hover:bg-tide-50"
                         aria-label="Resend confirmation"
                         title="Resend confirmation"
                       >
@@ -732,7 +732,7 @@ function RegistrationsPageInner() {
                       {hasPermission("payment.receipt.resend") && item.payment_status === "success" && (
                         <button
                           onClick={() => handleAction(`/admin/registrations/${item.slug}/resend-receipt`, "Receipt queued")}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-sky-600 transition hover:bg-slate-50"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sky-700 transition hover:border-sky-500 hover:bg-sky-50"
                           aria-label="Resend receipt"
                           title="Resend receipt"
                         >
@@ -743,7 +743,7 @@ function RegistrationsPageInner() {
                       {hasPermission("registration.cancel") && item.status !== "cancelled" && (
                         <button
                           onClick={() => setCancelTarget(item)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-rose-600 transition hover:bg-slate-50"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-rose-50 text-rose-700 transition hover:border-rose-500 hover:bg-rose-100"
                           aria-label="Cancel registration"
                           title="Cancel registration"
                         >

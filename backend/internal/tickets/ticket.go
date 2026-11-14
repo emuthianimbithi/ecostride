@@ -59,12 +59,18 @@ func RaceDate(start time.Time) string {
 }
 func PDF(ticket Ticket) []byte {
 	reg, event := ticket.Registration, ticket.Event
-	lines := []string{event.Title, "YOUR RACE TICKET", "Athlete: " + reg.AthleteName, "Race day: " + RaceDate(event.StartAt), "Location: " + event.Location, "Registration reference: " + reg.Slug.String(), "Entry: Confirmed"}
+	category := ""
 	if ticket.Category != nil {
-		lines = append(lines, "Category: "+ticket.Category.Name)
+		category = ticket.Category.Name
 	}
-	lines = append(lines, "Bring this ticket or registration reference for race-day lookup.", "Your bib and pack collection will be recorded separately.")
-	return pdf.BuildSimplePDF(lines)
+	return pdf.BuildRaceTicket(pdf.RaceTicket{
+		EventTitle: event.Title,
+		Athlete:    reg.AthleteName,
+		RaceDate:   RaceDate(event.StartAt),
+		Location:   event.Location,
+		Category:   category,
+		Reference:  reg.Slug.String(),
+	})
 }
 func Calendar(ticket Ticket, base string) []byte {
 	if !ticket.Eligible || ticket.Event.StartAt.IsZero() {
