@@ -36,12 +36,34 @@ func (s *Service) CreateRegistration(ctx context.Context, registration models.Re
 			return err
 		}
 
-		consent.RegistrationID = registration.ID
-		if err := tx.Create(&consent).Error; err != nil {
-			return err
+		if consent.WaiverVersionID != 0 {
+			consent.RegistrationID = registration.ID
+			if err := tx.Create(&consent).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
+	})
+	return registration, err
+}
+
+func (s *Service) CreateWaivedRegistration(ctx context.Context, registration models.Registration, payment models.Payment) (models.Registration, error) {
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if registration.CategoryID != nil {
+			var category models.EventCategory
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND event_id = ?", *registration.CategoryID, registration.EventID).First(&category).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrCategoryUnavailable
+				}
+				return err
+			}
+		}
+		if err := tx.Create(&registration).Error; err != nil {
+			return err
+		}
+		payment.RegistrationID = &registration.ID
+		return tx.Create(&payment).Error
 	})
 	return registration, err
 }

@@ -139,6 +139,7 @@ func registerAPIRoutes(router *gin.Engine, handlers Handlers, authManager *auth.
 
 	// Admin: Registrations
 	admin.GET("/registrations", RequirePermission("registration.read"), handlers.Registrations.ListRegistrations)
+	admin.POST("/registrations", RequirePermission("registration.write"), handlers.Registrations.CreateAdminRegistration)
 	admin.GET("/registrations/export", RequirePermission("registration.read"), handlers.Registrations.ExportRegistrations)
 	admin.GET("/registrations/:id", RequirePermission("registration.read"), handlers.Registrations.GetRegistration)
 	admin.PUT("/registrations/:id", RequirePermission("registration.write"), handlers.Registrations.UpdateRegistration)

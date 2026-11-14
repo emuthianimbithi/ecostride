@@ -77,6 +77,19 @@ type updateRequest struct {
 	Experience     *string    `json:"experience"`
 }
 
+type adminCreateRequest struct {
+	EventSlug    string     `json:"event_slug" binding:"required"`
+	CategorySlug *string    `json:"category_slug"`
+	AthleteName  string     `json:"athlete_name" binding:"required"`
+	Email        string     `json:"email" binding:"required,email"`
+	Phone        string     `json:"phone" binding:"required,phone"`
+	Dob          *time.Time `json:"dob"`
+	Gender       string     `json:"gender"`
+	Nationality  string     `json:"nationality"`
+	Residence    string     `json:"residence"`
+	TshirtSize   string     `json:"tshirt_size"`
+}
+
 type registrationExportRow struct {
 	RegistrationSlug string    `json:"registration_slug"`
 	EventTitle       string    `json:"event_title"`
@@ -396,6 +409,58 @@ func (h *Handler) ListRegistrations(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, registrations)
+}
+
+// CreateAdminRegistration creates a confirmed registration with payment waived.
+func (h *Handler) CreateAdminRegistration(c *gin.Context) {
+	var req adminCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	event, err := h.findEventBySlug(c, req.EventSlug)
+	if err != nil {
+		return
+	}
+	category, err := h.resolveCategory(c, event.ID, req.CategorySlug)
+	if err != nil {
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if err := h.ensureNoDuplicate(c, event.ID, req.Email); err != nil {
+		return
+	}
+
+	var categoryID *uint
+	if category != nil {
+		categoryID = &category.ID
+	}
+	registration := models.Registration{
+		Slug: uuid.New(), EventID: event.ID, CategoryID: categoryID,
+		AthleteName: strings.TrimSpace(req.AthleteName), Email: req.Email, Phone: strings.TrimSpace(req.Phone),
+		Dob: req.Dob, Gender: req.Gender, Nationality: req.Nationality, Residence: req.Residence,
+		TshirtSize: req.TshirtSize, Extras: datatypes.JSON([]byte("{}")), Status: "confirmed",
+	}
+	metadata, _ := json.Marshal(gin.H{"reason": "sponsor", "created_by_admin": h.getActorID(c)})
+	created, err := h.Service.CreateWaivedRegistration(c.Request.Context(), registration, models.Payment{
+		Slug: uuid.New(), Provider: "admin_waiver", Currency: "KES", AmountMinor: 0,
+		Status: "waived", Metadata: datatypes.JSON(metadata),
+	})
+	if err != nil {
+		if errors.Is(err, ErrCategoryUnavailable) {
+			c.JSON(409, gin.H{"error": "category is no longer available"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create registration"})
+		return
+	}
+	if h.Jobs != nil {
+		_, _ = h.Jobs.Enqueue(c.Request.Context(), "registration.confirmation", registrationJobPayload{RegistrationID: created.ID}, time.Now())
+	} else {
+		_ = SendConfirmationEmail(c.Request.Context(), h.Config, h.DB, created.ID)
+	}
+	h.logAudit(c, "registration.create.waived", "registration", created.Slug.String(), nil, gin.H{"event_slug": req.EventSlug, "email": created.Email, "reason": "sponsor"})
+	c.JSON(http.StatusCreated, gin.H{"slug": created.Slug, "status": created.Status, "payment_status": "waived"})
 }
 
 func (h *Handler) ExportRegistrations(c *gin.Context) {

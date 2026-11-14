@@ -1,12 +1,12 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react"
 import { useSearchParams } from "next/navigation"
 import { apiFetchResponse, apiGet, apiPost } from "../../../lib/api-client"
 import { useAuth } from "../../../components/auth-provider"
 import { useToast } from "../../../components/toast"
 import { toastApiError } from "../../../lib/toast-api-error"
-import { Download, Eye, Mail, Receipt, Settings2, X, XCircle } from "lucide-react"
+import { Download, Eye, Mail, Receipt, Settings2, UserPlus, X, XCircle } from "lucide-react"
 import { TypedConfirmDialog } from "../../../components/ui/typed-confirm-dialog"
 
 type Registration = {
@@ -35,6 +35,8 @@ type Event = {
   title: string
   start_at: string
 }
+
+type EventCategory = { slug: string; name: string }
 
 type AuditLog = {
   Slug?: string
@@ -98,7 +100,10 @@ const formatMoney = (currency?: string, minor?: number) => {
   if (!currency || minor == null) return "-"
   const value = minor / 100
   try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value)
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency
+    }).format(value)
   } catch {
     return `${currency} ${value.toFixed(2)}`
   }
@@ -144,6 +149,16 @@ function RegistrationsPageInner() {
   const [showColumnMenu, setShowColumnMenu] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(defaultVisibleColumns)
   const [savedPresets, setSavedPresets] = useState<FilterPreset[]>([])
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [categories, setCategories] = useState<EventCategory[]>([])
+  const [creating, setCreating] = useState(false)
+  const [newRegistration, setNewRegistration] = useState({
+    event_slug: "",
+    category_slug: "",
+    athlete_name: "",
+    email: "",
+    phone: ""
+  })
 
   const [filters, setFilters] = useState({
     event_slug: "",
@@ -153,7 +168,10 @@ function RegistrationsPageInner() {
   const [filterErrors, setFilterErrors] = useState<Record<string, string>>({})
 
   const selectedSlugs = useMemo(
-    () => Object.entries(selected).filter(([, checked]) => checked).map(([slug]) => slug),
+    () =>
+      Object.entries(selected)
+        .filter(([, checked]) => checked)
+        .map(([slug]) => slug),
     [selected]
   )
 
@@ -241,6 +259,48 @@ function RegistrationsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.event_slug, filters.status, filters.search])
 
+  useEffect(() => {
+    if (!newRegistration.event_slug) {
+      setCategories([])
+      return
+    }
+    const event = events.find((item) => item.url_slug === newRegistration.event_slug)
+    if (!event) {
+      setCategories([])
+      return
+    }
+    apiGet<EventCategory[]>(`/admin/events/${event.slug}/categories`)
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => setCategories([]))
+  }, [events, newRegistration.event_slug])
+
+  const createWaivedRegistration = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setCreating(true)
+    setError(null)
+    try {
+      await apiPost("/admin/registrations", {
+        ...newRegistration,
+        category_slug: newRegistration.category_slug || null
+      })
+      setStatus("Sponsor registration created. Confirmation and ticket email queued.")
+      setNewRegistration({
+        event_slug: "",
+        category_slug: "",
+        athlete_name: "",
+        email: "",
+        phone: ""
+      })
+      setShowCreateForm(false)
+      await Promise.all([loadRegistrations(), loadAudit()])
+    } catch (err) {
+      toastApiError(toast, err)
+      setError(err instanceof Error ? err.message : "Failed to create registration")
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const filtered = useMemo(() => items, [items])
 
   const setFilterErr = (k: string, msg?: string) => {
@@ -309,7 +369,11 @@ function RegistrationsPageInner() {
     } catch {
       // ignore
     }
-    toast({ title: "Filter saved", description: `Saved as "${newPreset.label}".`, variant: "success" })
+    toast({
+      title: "Filter saved",
+      description: `Saved as "${newPreset.label}".`,
+      variant: "success"
+    })
   }
 
   return (
@@ -321,6 +385,96 @@ function RegistrationsPageInner() {
 
       {error && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-600">{error}</div>}
       {status && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{status}</div>}
+
+      {hasPermission("registration.write") && (
+        <div>
+          <button
+            onClick={() => setShowCreateForm((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white"
+          >
+            <UserPlus className="h-4 w-4" /> Add sponsor registration
+          </button>
+          {showCreateForm && (
+            <form
+              onSubmit={createWaivedRegistration}
+              className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <select
+                required
+                value={newRegistration.event_slug}
+                onChange={(e) =>
+                  setNewRegistration((v) => ({
+                    ...v,
+                    event_slug: e.target.value,
+                    category_slug: ""
+                  }))
+                }
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              >
+                <option value="">Choose event</option>
+                {events.map((event) => (
+                  <option key={event.slug} value={event.url_slug}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={newRegistration.category_slug}
+                onChange={(e) =>
+                  setNewRegistration((v) => ({
+                    ...v,
+                    category_slug: e.target.value
+                  }))
+                }
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              >
+                <option value="">{categories.length ? "Choose category" : "No category"}</option>
+                {categories.map((category) => (
+                  <option key={category.slug} value={category.slug}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                required
+                placeholder="Athlete name"
+                value={newRegistration.athlete_name}
+                onChange={(e) =>
+                  setNewRegistration((v) => ({
+                    ...v,
+                    athlete_name: e.target.value
+                  }))
+                }
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+              <input
+                required
+                type="email"
+                placeholder="Email"
+                value={newRegistration.email}
+                onChange={(e) => setNewRegistration((v) => ({ ...v, email: e.target.value }))}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+              <input
+                required
+                placeholder="Phone"
+                value={newRegistration.phone}
+                onChange={(e) => setNewRegistration((v) => ({ ...v, phone: e.target.value }))}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  disabled={creating}
+                  className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {creating ? "Creating…" : "Create and email ticket"}
+                </button>
+                <span className="text-xs text-slate-500">Payment waived for sponsor</span>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="flex flex-wrap gap-3">
@@ -429,12 +583,11 @@ function RegistrationsPageInner() {
         {savedPresets.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {savedPresets.map((preset) => (
-              <div key={preset.id} className="inline-flex items-center gap-1 rounded-full border border-tide-200 bg-tide-50 px-2 py-1 text-xs text-tide-700">
-                <button
-                  onClick={() => setFilters({ ...preset.filters })}
-                  className="font-semibold"
-                  title={`Apply ${preset.label}`}
-                >
+              <div
+                key={preset.id}
+                className="inline-flex items-center gap-1 rounded-full border border-tide-200 bg-tide-50 px-2 py-1 text-xs text-tide-700"
+              >
+                <button onClick={() => setFilters({ ...preset.filters })} className="font-semibold" title={`Apply ${preset.label}`}>
                   {preset.label}
                 </button>
                 <button
@@ -466,10 +619,7 @@ function RegistrationsPageInner() {
             >
               Cancel selected
             </button>
-            <button
-              onClick={() => setSelected({})}
-              className="rounded-full border border-border px-3 py-1.5 text-xs"
-            >
+            <button onClick={() => setSelected({})} className="rounded-full border border-border px-3 py-1.5 text-xs">
               Clear selection
             </button>
           </div>
@@ -541,9 +691,15 @@ function RegistrationsPageInner() {
                   {visibleColumns.category && <td className="px-4 py-3 text-slate-600">{item.category_name ?? "-"}</td>}
                   {visibleColumns.payment && (
                     <td className="px-4 py-3 text-slate-600">
-                      <div className="font-medium text-slate-800">{formatMoney(item.payment_currency, item.payment_amount_minor)}</div>
+                      <div className="font-medium text-slate-800">
+                        {item.payment_provider === "admin_waiver"
+                          ? "Waived"
+                          : formatMoney(item.payment_currency, item.payment_amount_minor)}
+                      </div>
                       <div className="text-xs text-slate-500">
-                        {item.payment_provider ?? "No payment"} • {item.payment_status ? item.payment_status : "pending"}
+                        {item.payment_provider === "admin_waiver"
+                          ? "Sponsor registration"
+                          : `${item.payment_provider ?? "No payment"} • ${item.payment_status ?? "pending"}`}
                       </div>
                     </td>
                   )}
@@ -560,9 +716,7 @@ function RegistrationsPageInner() {
                     </td>
                   )}
                   {visibleColumns.created && (
-                    <td className="px-4 py-3 text-slate-600">
-                      {item.created_at ? new Date(item.created_at).toLocaleDateString() : "-"}
-                    </td>
+                    <td className="px-4 py-3 text-slate-600">{item.created_at ? new Date(item.created_at).toLocaleDateString() : "-"}</td>
                   )}
                   <td className="px-4 py-3 text-xs">
                     <div className="flex items-center gap-2">

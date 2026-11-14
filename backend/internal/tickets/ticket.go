@@ -39,7 +39,7 @@ func Load(ctx context.Context, db *gorm.DB, id uint) (Ticket, error) {
 		paid := category.PriceKESMinor > 0 || (category.PriceUSDMinor != nil && *category.PriceUSDMinor > 0) || (category.PriceEURMinor != nil && *category.PriceEURMinor > 0)
 		if paid {
 			var count int64
-			if err := db.WithContext(ctx).Model(&models.Payment{}).Where("registration_id = ? AND status = 'success' AND amount_minor > 0", reg.ID).Count(&count).Error; err != nil {
+			if err := db.WithContext(ctx).Model(&models.Payment{}).Where("registration_id = ? AND ((status = 'success' AND amount_minor > 0) OR (status = 'waived' AND provider = 'admin_waiver'))", reg.ID).Count(&count).Error; err != nil {
 				return result, err
 			}
 			result.Eligible = result.Eligible && count > 0
